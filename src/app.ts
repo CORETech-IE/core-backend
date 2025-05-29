@@ -10,26 +10,18 @@ import { logWithTrace } from './middlewares/logWithTrace';
 import configureExpress from './config/express';
 import configureRouter from './routes/appRoutes';
 
+// Validate configuration before starting the server
+// This ensures all required environment variables are set
+// and the application is ready to run
 validateConfig();
+
+// Start the heartbeat service to emit periodic heartbeat signals
+// This is useful for monitoring the health of the application
+// and ensuring it is running as expected
 startHeartbeat();
 
 const app = express();
 
-
-const fakeReq = {} as Request;
-logWithTrace(fakeReq, {
-  job_type: 'BOOT',
-  action: 'CONFIG_PATHS',
-  level: 'info',
-  emit: false,
-  data: {
-    config_paths: {
-      reports: process.env.REPORTS_CONFIG_PATH || 'default-reports-path',
-      logs: process.env.LOGS_CONFIG_PATH || 'default-logs-path',
-      metrics: process.env.METRICS_CONFIG_PATH || 'default-metrics-path',
-    }
-  }
-}).catch(() => {});
 
 configureExpress(app);
 app.use('/auth', authRoutes);
@@ -37,7 +29,7 @@ configureRouter(app);
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.BACKEND_PORT;
 app.listen(PORT, () => {
   logger.info(`✅ Server is running on http://localhost:${PORT}`);
 });

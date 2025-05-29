@@ -35,7 +35,7 @@ export const startHeartbeat = () => {
       }
 
       const payload = {
-        client_id: config.tenantClientId,
+        client_id: config.tenantId,
         service: config.serviceName || "core_services",
         timestamp: new Date().toISOString(),
         status: first ? "STARTUP" : "OK",
@@ -62,6 +62,6 @@ export const startHeartbeat = () => {
         console.error("❌ Unknown error:", err);
       }
     }
-  }, 120000); // every 2 minutes
-  console.log("Heartbeat emitter started, sending every 2 minutes");
+  }, 60000); //every 60 seconds
+  console.log("Heartbeat emitter started, sending every 1 minute");
 };

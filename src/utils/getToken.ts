@@ -11,7 +11,17 @@ export async function getAuthToken(): Promise<string> {
   }
 
   try {
-    const response = await axios.post(`${config.authUrl}/login`, {
+    
+    if (!config.authUrl || !config.authUsername || !config.authPassword) {
+      throw new Error("Missing authentication configuration");
+    }
+
+    console.log("🔑 Requesting new auth token...");
+    console.log("🔑 Auth URL:", config.authUrl);
+    console.log("🔑 Auth Username:", config.authUsername);
+    console.log("🔑 Auth Password:", config.authPassword);
+
+    const response = await axios.post(`${config.authUrl}`, {
       username: config.authUsername,
       password: config.authPassword,
     });

@@ -11,7 +11,7 @@ const backendPort = process.env.BACKEND_PORT;
 const envConfig = {
   clientId: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
-  tenantId: process.env.TENANT_ID,
+  tenantId: process.env.TENANT_CLIENT_ID,
   senderEmail: process.env.SENDER_EMAIL,
   pgHost: process.env.PGHOST,
   pgPort: Number(process.env.PGPORT),
