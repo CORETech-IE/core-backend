@@ -1,0 +1,65 @@
+{
+  "name": "report-generation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon --watch 'src/**/*.ts' --exec ts-node app.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CORETech-IE/reports.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CORETech-IE/reports/issues"
+  },
+  "homepage": "https://github.com/CORETech-IE/reports#readme",
+  "dependencies": {
+    "@types/express": "^4.17.17",
+    "@types/pg": "^8.15.2",
+    "axios": "^1.9.0",
+    "barcode": "^0.1.0",
+    "bcrypt": "^6.0.0",
+    "bitgener": "^1.2.12",
+    "body-parser": "^1.20.2",
+    "bwip-js": "^4.6.0",
+    "chart.js": "^4.4.9",
+    "chartjs-node-canvas": "^5.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "html-pdf": "^3.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.13.0",
+    "mustache": "^4.2.0",
+    "nodemailer": "^7.0.3",
+    "pdf-lib": "^1.17.1",
+    "pdfkit": "^0.13.0",
+    "pg": "^8.16.0",
+    "pug": "^3.0.2",
+    "puppeteer": "^21.0.2",
+    "typescript": "^5.1.6",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "zod": "^3.25.23"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.7",
+    "@types/axios": "^0.14.4",
+    "@types/bcrypt": "^5.0.2",
+    "@types/html-pdf": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/mustache": "^4.2.5",
+    "@types/nodemailer": "^6.4.17",
+    "@types/pdfkit": "^0.12.10",
+    "@types/pug": "^2.0.6",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.2"
+  }
+}

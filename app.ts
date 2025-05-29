@@ -1,0 +1,28 @@
+import express from 'express';
+import { Request } from 'express';
+import { startHeartbeat } from './src/services/heartbeatEmitter';
+import { errorHandler } from './src/middlewares/errorHandler';
+import logger from './src/utils/logger';
+import authRoutes from './src/routes/authRoutes';
+//import { validateConfig } from './config/config-validator';
+import { logWithTrace } from './src/middlewares/logWithTrace';
+import configureExpress from './src/config/express';
+import configureRouter from './src/routes/appRoutes';
+
+//validateConfig();
+startHeartbeat();
+
+const app = express();
+
+configureExpress(app);
+app.use('/auth', authRoutes);
+configureRouter(app);
+
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  logger.info(`✅ Server is running on http://localhost:${PORT}`);
+});
+
+export default app;
