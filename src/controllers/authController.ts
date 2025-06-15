@@ -1,12 +1,7 @@
 /**
- * 🚨 CORE-BACKEND: Nuclear Authentication Controller
+ * 🚨 CORE-BACKEND: Authentication Controller (SIMPLIFIED)
  * 
- * Simple but secure JWT authentication for multi-client access
- * Compatible with Oracle PL/SQL, JavaScript, Python clients
- * 
- * Classification: CONFIDENTIAL (authentication logic)
- * Retention: 7 years (security requirement)
- * Review Date: Every 3 months (critical security component)
+ * JWT authentication for multi-client access
  */
 
 import { Request, Response } from 'express';
@@ -16,7 +11,7 @@ import envConfig from '../config/envConfig';
 import logger from '../utils/logger';
 
 /**
- * User record interface with security context
+ * User record interface
  */
 interface UserRecord {
   readonly username: string;
@@ -24,9 +19,7 @@ interface UserRecord {
   readonly role: string;
   readonly enabled: boolean;
   readonly created_at: string;
-  readonly last_login?: string;
   readonly failed_attempts: number;
-  readonly locked_until?: string;
 }
 
 /**
@@ -41,245 +34,99 @@ interface JWTPayload {
 }
 
 /**
- * Authentication response interface
+ * Get users - TEMPORAL hardcoded
+ * TODO: Migrar a SOPS cuando esté estable
  */
-interface AuthResponse {
-  token: string;
-  expires_in: number;
-  token_type: 'Bearer';
-  issued_at: string;
-  user: {
-    username: string;
-    role: string;
-    tenant_id: string;
+function getUsers(): Record<string, UserRecord> {
+  return {
+    "admin": {
+      username: "admin",
+      password_hash: "$2b$12$n9mBEWXteAgZCOayuN7C3OcWbajiLhwUT1kLosnDakiNlKiWdV7c.",
+      role: "admin",
+      enabled: true,
+      created_at: new Date().toISOString(),
+      failed_attempts: 0
+    },
+    "core-services": {
+      username: "core-services", 
+      password_hash: "$2b$12$iSjq0bMgi/3lgMZVh85ie.2OKXMFAM1kuZHu31mP8yMaPjF.lJkWi",
+      role: "service",
+      enabled: true,
+      created_at: new Date().toISOString(),
+      failed_attempts: 0
+    }
   };
 }
 
 /**
- * Load users from core-envs-private configuration
- * This will be replaced with actual core-envs-private integration
- * For now, uses environment variables with secure defaults
- */
-function loadUsersFromCoreEnvs(): Record<string, UserRecord> {
-  // TODO: Replace with actual core-envs-private integration
-  // For development, load from environment variables
-  
-  const users: Record<string, UserRecord> = {};
-  
-  // Core services user (primary service account)
-  const coreServicesUsername = process.env.CORE_SERVICES_USERNAME || 'core-services';
-  const coreServicesPassword = process.env.CORE_SERVICES_PASSWORD_HASH;
-  
-  if (coreServicesPassword) {
-    users[coreServicesUsername] = {
-      username: coreServicesUsername,
-      password_hash: coreServicesPassword,
-      role: 'service',
-      enabled: true,
-      created_at: new Date().toISOString(),
-      failed_attempts: 0
-    };
-  }
-  
-  // Admin user (for administrative access)
-  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminPassword = process.env.ADMIN_PASSWORD_HASH;
-  
-  if (adminPassword) {
-    users[adminUsername] = {
-      username: adminUsername,
-      password_hash: adminPassword,
-      role: 'admin',
-      enabled: true,
-      created_at: new Date().toISOString(),
-      failed_attempts: 0
-    };
-  }
-  
-  // Validate at least one user exists
-  if (Object.keys(users).length === 0) {
-    logger.error('💥 CRITICAL: No users configured for authentication', {
-      classification: 'CRITICAL',
-      audit_event: 'NO_USERS_CONFIGURED',
-      security_impact: 'AUTHENTICATION_UNAVAILABLE'
-    });
-    
-    throw new Error('No authentication users configured');
-  }
-  
-  logger.info('✅ Users loaded from configuration', {
-    classification: 'HIGH',
-    audit_event: 'USERS_LOADED',
-    user_count: Object.keys(users).length,
-    usernames: Object.keys(users) // Safe to log usernames
-  });
-  
-  return users;
-}
-
-/**
- * Get users with caching and error handling
- * Implements circuit breaker pattern for resilience
- */
-let cachedUsers: Record<string, UserRecord> | null = null;
-let lastUserLoad = 0;
-const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function getUsers(): Record<string, UserRecord> {
-  const now = Date.now();
-  
-  // Use cached users if still valid
-  if (cachedUsers && (now - lastUserLoad) < USER_CACHE_TTL) {
-    return cachedUsers;
-  }
-  
-  try {
-    cachedUsers = loadUsersFromCoreEnvs();
-    lastUserLoad = now;
-    return cachedUsers;
-  } catch (error) {
-    logger.error('💥 Failed to load users', {
-      classification: 'CRITICAL',
-      audit_event: 'USER_LOAD_FAILED',
-      error: error instanceof Error ? error.message : String(error)
-    });
-    
-    // If we have cached users, use them as fallback
-    if (cachedUsers) {
-      logger.warn('⚠️ Using cached users as fallback', {
-        classification: 'HIGH',
-        audit_event: 'USER_CACHE_FALLBACK'
-      });
-      return cachedUsers;
-    }
-    
-    throw error;
-  }
-}
-
-/**
- * Validate user credentials with security controls
+ * Validate user credentials
  */
 async function validateCredentials(
   username: string, 
-  password: string,
-  clientIp: string,
-  correlationId: string
+  password: string
 ): Promise<{ valid: boolean; user?: UserRecord; reason?: string }> {
   
   const users = getUsers();
   const user = users[username];
   
-  // User not found
   if (!user) {
-    logger.warn('🚫 Authentication failed - user not found', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_USER_NOT_FOUND',
-      username,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
+    logger.warn('Authentication failed - user not found', { username });
     return { valid: false, reason: 'Invalid credentials' };
   }
   
-  // User disabled
   if (!user.enabled) {
-    logger.warn('🚫 Authentication failed - user disabled', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_USER_DISABLED',
-      username,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
+    logger.warn('Authentication failed - user disabled', { username });
     return { valid: false, reason: 'Account disabled' };
   }
+
+  // 🔍 DEBUG TEMPORAL - BORRAR DESPUÉS
+  console.log('🔐 Debug auth:', {
+    username,
+    password_received: password,
+    stored_hash: user.password_hash,
+    hash_starts_with: user.password_hash.substring(0, 7)
+  });
   
-  // Account locked
-  if (user.locked_until && new Date(user.locked_until) > new Date()) {
-    logger.warn('🚫 Authentication failed - account locked', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_USER_LOCKED',
-      username,
-      locked_until: user.locked_until,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
-    return { valid: false, reason: 'Account temporarily locked' };
-  }
-  
-  // Validate password
   try {
     const passwordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!passwordValid) {
-      logger.warn('🚫 Authentication failed - invalid password', {
-        classification: 'HIGH',
-        audit_event: 'AUTH_INVALID_PASSWORD',
-        username,
-        failed_attempts: user.failed_attempts + 1,
-        client_ip: clientIp,
-        correlation_id: correlationId
-      });
-      
+      logger.warn('Authentication failed - invalid password', { username });
       return { valid: false, reason: 'Invalid credentials' };
     }
     
-    logger.info('✅ Authentication successful', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_SUCCESS',
-      username,
-      role: user.role,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
+    logger.info('Authentication successful', { username, role: user.role });
     return { valid: true, user };
     
   } catch (error) {
-    logger.error('💥 Password validation error', {
-      classification: 'CRITICAL',
-      audit_event: 'AUTH_VALIDATION_ERROR',
+    logger.error('Password validation error', {
       username,
-      error: error instanceof Error ? error.message : String(error),
-      client_ip: clientIp,
-      correlation_id: correlationId
+      error: error instanceof Error ? error.message : String(error)
     });
-    
     return { valid: false, reason: 'Authentication error' };
   }
 }
 
 /**
- * Generate secure JWT token
+ * Generate JWT token
  */
-function generateJWT(user: UserRecord, correlationId: string): { token: string; expiresIn: number } {
+function generateJWT(user: UserRecord): { token: string; expiresIn: number } {
   const now = Math.floor(Date.now() / 1000);
-  const expiresIn = 15 * 60; // 15 minutes for security
+  const expiresIn = 15 * 60; // 15 minutes
   
-  const payload: JWTPayload = {
+  const payload = {
+    sub: user.username,  // ← AÑADE ESTO
     username: user.username,
-    role: user.role,
-    tenant_id: envConfig.tenantId,
+    tenant_name: envConfig.tenantId,  // ← Cambiar de tenant_id a tenant_name
+    roles: [user.role],  // ← Array en vez de string
+    permissions: user.role === 'admin' ? ['read', 'write', 'delete'] : ['read', 'write'],
+    session_id: `session-${Date.now()}`,
     iat: now,
     exp: now + expiresIn
   };
   
   const token = jwt.sign(payload, envConfig.jwtSecret, {
-    algorithm: 'HS256',
-    issuer: 'core-backend',
-    audience: 'core-platform'
-  });
-  
-  logger.info('🔑 JWT token generated', {
-    classification: 'HIGH',
-    audit_event: 'JWT_GENERATED',
-    username: user.username,
-    role: user.role,
-    expires_in: expiresIn,
-    correlation_id: correlationId
+    algorithm: 'HS256'
   });
   
   return { token, expiresIn };
@@ -287,68 +134,30 @@ function generateJWT(user: UserRecord, correlationId: string): { token: string; 
 
 /**
  * Login endpoint
- * Authenticates user and returns JWT token
  */
 export const login = async (req: Request, res: Response): Promise<void> => {
-  const startTime = Date.now();
-  const correlationId = (req as any).correlationId || 'unknown';
-  const clientIp = req.ip || 'unknown';
-  
   try {
-    // Input validation
     const { username, password } = req.body;
     
     if (!username || !password) {
-      logger.warn('🚫 Login failed - missing credentials', {
-        classification: 'HIGH',
-        audit_event: 'LOGIN_MISSING_CREDENTIALS',
-        has_username: !!username,
-        has_password: !!password,
-        client_ip: clientIp,
-        correlation_id: correlationId
-      });
-      
       res.status(400).json({
-        error: 'Username and password are required',
-        correlation_id: correlationId
+        error: 'Username and password are required'
       });
       return;
     }
     
-    // Validate input format
-    if (typeof username !== 'string' || typeof password !== 'string') {
-      logger.warn('🚫 Login failed - invalid input format', {
-        classification: 'HIGH',
-        audit_event: 'LOGIN_INVALID_FORMAT',
-        username_type: typeof username,
-        password_type: typeof password,
-        client_ip: clientIp,
-        correlation_id: correlationId
-      });
-      
-      res.status(400).json({
-        error: 'Invalid input format',
-        correlation_id: correlationId
-      });
-      return;
-    }
-    
-    // Validate credentials
-    const validation = await validateCredentials(username, password, clientIp, correlationId);
+    const validation = await validateCredentials(username, password);
     
     if (!validation.valid || !validation.user) {
       res.status(401).json({
-        error: validation.reason || 'Authentication failed',
-        correlation_id: correlationId
+        error: validation.reason || 'Authentication failed'
       });
       return;
     }
     
-    // Generate JWT
-    const { token, expiresIn } = generateJWT(validation.user, correlationId);
+    const { token, expiresIn } = generateJWT(validation.user);
     
-    // Prepare response
-    const response: AuthResponse = {
+    res.status(200).json({
       token,
       expires_in: expiresIn,
       token_type: 'Bearer',
@@ -358,197 +167,106 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         role: validation.user.role,
         tenant_id: envConfig.tenantId
       }
-    };
-    
-    const duration = Date.now() - startTime;
-    
-    logger.info('✅ Login successful', {
-      classification: 'HIGH',
-      audit_event: 'LOGIN_SUCCESS',
-      username: validation.user.username,
-      role: validation.user.role,
-      duration_ms: duration,
-      client_ip: clientIp,
-      correlation_id: correlationId
     });
     
-    res.status(200).json(response);
-    
   } catch (error) {
-    const duration = Date.now() - startTime;
-    
-    logger.error('💥 Login error', {
-      classification: 'CRITICAL',
-      audit_event: 'LOGIN_ERROR',
-      error: error instanceof Error ? error.message : String(error),
-      duration_ms: duration,
-      client_ip: clientIp,
-      correlation_id: correlationId
+    logger.error('Login error', {
+      error: error instanceof Error ? error.message : String(error)
     });
     
     res.status(500).json({
-      error: 'Internal authentication error',
-      correlation_id: correlationId
+      error: 'Internal authentication error'
     });
   }
 };
 
 /**
- * Token validation endpoint
- * Validates JWT token and returns user info
+ * Validate token endpoint
  */
 export const validateToken = async (req: Request, res: Response): Promise<void> => {
-  const correlationId = (req as any).correlationId || 'unknown';
-  
   try {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({
-        error: 'Missing or invalid authorization header',
-        correlation_id: correlationId
+        error: 'Missing or invalid authorization header'
       });
       return;
     }
     
     const token = authHeader.split(' ')[1];
+    const payload = jwt.verify(token, envConfig.jwtSecret) as JWTPayload;
     
-    try {
-      const payload = jwt.verify(token, envConfig.jwtSecret) as JWTPayload;
-      
-      logger.info('✅ Token validation successful', {
-        classification: 'INTERNAL',
-        audit_event: 'TOKEN_VALIDATED',
+    res.status(200).json({
+      valid: true,
+      user: {
         username: payload.username,
         role: payload.role,
-        correlation_id: correlationId
-      });
-      
-      res.status(200).json({
-        valid: true,
-        user: {
-          username: payload.username,
-          role: payload.role,
-          tenant_id: payload.tenant_id
-        },
-        expires_at: new Date(payload.exp * 1000).toISOString(),
-        correlation_id: correlationId
-      });
-      
-    } catch (jwtError) {
-      logger.warn('🚫 Token validation failed', {
-        classification: 'HIGH',
-        audit_event: 'TOKEN_VALIDATION_FAILED',
-        error: jwtError instanceof Error ? jwtError.message : String(jwtError),
-        correlation_id: correlationId
-      });
-      
-      res.status(401).json({
-        error: 'Invalid or expired token',
-        correlation_id: correlationId
-      });
-    }
-    
-  } catch (error) {
-    logger.error('💥 Token validation error', {
-      classification: 'CRITICAL',
-      audit_event: 'TOKEN_VALIDATION_ERROR',
-      error: error instanceof Error ? error.message : String(error),
-      correlation_id: correlationId
+        tenant_id: payload.tenant_id
+      },
+      expires_at: new Date(payload.exp * 1000).toISOString()
     });
     
-    res.status(500).json({
-      error: 'Token validation error',
-      correlation_id: correlationId
+  } catch (error) {
+    res.status(401).json({
+      error: 'Invalid or expired token'
     });
   }
 };
 
 /**
- * Token refresh endpoint (optional)
- * Refreshes JWT token if still valid
+ * Refresh token endpoint
  */
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
-  const correlationId = (req as any).correlationId || 'unknown';
-  
   try {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({
-        error: 'Missing or invalid authorization header',
-        correlation_id: correlationId
+        error: 'Missing or invalid authorization header'
       });
       return;
     }
     
     const token = authHeader.split(' ')[1];
+    const payload = jwt.verify(token, envConfig.jwtSecret, { 
+      ignoreExpiration: true 
+    }) as JWTPayload;
     
-    try {
-      // Verify current token (even if expired, we check the payload)
-      const payload = jwt.verify(token, envConfig.jwtSecret, { ignoreExpiration: true }) as JWTPayload;
-      
-      // Check if token is not too old (max 1 hour for refresh)
-      const now = Math.floor(Date.now() / 1000);
-      const tokenAge = now - payload.iat;
-      const maxRefreshAge = 60 * 60; // 1 hour
-      
-      if (tokenAge > maxRefreshAge) {
-        res.status(401).json({
-          error: 'Token too old for refresh',
-          correlation_id: correlationId
-        });
-        return;
-      }
-      
-      // Get user to ensure still valid
-      const users = getUsers();
-      const user = users[payload.username];
-      
-      if (!user || !user.enabled) {
-        res.status(401).json({
-          error: 'User no longer valid',
-          correlation_id: correlationId
-        });
-        return;
-      }
-      
-      // Generate new token
-      const { token: newToken, expiresIn } = generateJWT(user, correlationId);
-      
-      logger.info('🔄 Token refreshed', {
-        classification: 'HIGH',
-        audit_event: 'TOKEN_REFRESHED',
-        username: payload.username,
-        correlation_id: correlationId
-      });
-      
-      res.status(200).json({
-        token: newToken,
-        expires_in: expiresIn,
-        token_type: 'Bearer',
-        issued_at: new Date().toISOString(),
-        correlation_id: correlationId
-      });
-      
-    } catch (jwtError) {
+    // Check if token is not too old
+    const now = Math.floor(Date.now() / 1000);
+    const tokenAge = now - payload.iat;
+    
+    if (tokenAge > 3600) { // 1 hour max
       res.status(401).json({
-        error: 'Invalid token for refresh',
-        correlation_id: correlationId
+        error: 'Token too old for refresh'
       });
+      return;
     }
     
-  } catch (error) {
-    logger.error('💥 Token refresh error', {
-      classification: 'CRITICAL',
-      audit_event: 'TOKEN_REFRESH_ERROR',
-      error: error instanceof Error ? error.message : String(error),
-      correlation_id: correlationId
+    // Verify user still exists and is valid
+    const users = getUsers();
+    const user = users[payload.username];
+    
+    if (!user || !user.enabled) {
+      res.status(401).json({
+        error: 'User no longer valid'
+      });
+      return;
+    }
+    
+    const { token: newToken, expiresIn } = generateJWT(user);
+    
+    res.status(200).json({
+      token: newToken,
+      expires_in: expiresIn,
+      token_type: 'Bearer',
+      issued_at: new Date().toISOString()
     });
     
-    res.status(500).json({
-      error: 'Token refresh error',
-      correlation_id: correlationId
+  } catch (error) {
+    res.status(401).json({
+      error: 'Invalid token for refresh'
     });
   }
 };

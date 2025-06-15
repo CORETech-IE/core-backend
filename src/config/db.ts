@@ -1,17 +1,17 @@
 /**
  * 🚨 CORE-BACKEND: Nuclear Database Configuration
- * 
+ *
  * Production-ready PostgreSQL connection pool with comprehensive monitoring
  * Implements security, reliability, and compliance controls
- * 
+ *
  * Classification: CONFIDENTIAL (database connection logic)
  * Retention: Service lifetime (operational requirement)
  * Review Date: Every 3 months (critical infrastructure)
  */
 
-import { Pool, PoolClient, QueryResult, PoolConfig, QueryResultRow } from 'pg';
-import envConfig from './envConfig';
-import logger from '../utils/logger';
+import { Pool, PoolClient, QueryResult, PoolConfig, QueryResultRow } from "pg";
+import envConfig from "./envConfig";
+import logger from "../utils/logger";
 
 /**
  * Database query interface for type safety
@@ -26,7 +26,7 @@ interface DatabaseQuery {
  * Database health status interface
  */
 interface DatabaseHealth {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy";
   connections: {
     total: number;
     idle: number;
@@ -48,30 +48,32 @@ const poolConfig: PoolConfig = {
   database: envConfig.pgDatabase,
   user: envConfig.pgUser,
   password: envConfig.pgPassword,
-  
   // Connection pool configuration
-  min: 2,                    // Minimum connections (always ready)
-  max: 20,                   // Maximum connections (prevent resource exhaustion)
-  idleTimeoutMillis: 30000,  // 30 seconds idle timeout
-  connectionTimeoutMillis: 5000, // 5 seconds connection timeout
-  
+  min: envConfig.pgMinConnections || 2,
+  max: envConfig.pgMaxConnections || 20,
+  idleTimeoutMillis: envConfig.pgIdleTimeoutMillis || 30000,
+  connectionTimeoutMillis: envConfig.pgConnectionTimeoutMillis || 5000,
+
   // SSL configuration (production security)
-  ssl: envConfig.nodeEnv === 'production' ? {
-    rejectUnauthorized: true,
-    ca: process.env.POSTGRES_CA_CERT,
-    cert: process.env.POSTGRES_CLIENT_CERT,
-    key: process.env.POSTGRES_CLIENT_KEY
-  } : false,
-  
+  ssl:
+    envConfig.nodeEnv === "production"
+      ? {
+          rejectUnauthorized: true,
+          ca: process.env.POSTGRES_CA_CERT,
+          cert: process.env.POSTGRES_CLIENT_CERT,
+          key: process.env.POSTGRES_CLIENT_KEY,
+        }
+      : false,
+
   // Application identification
   application_name: `${envConfig.serviceName}-${envConfig.nodeEnv}`,
-  
+
   // Connection validation
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
-  
+
   // Performance tuning
-  allowExitOnIdle: false     // Keep process alive
+  allowExitOnIdle: false, // Keep process alive
 };
 
 /**
@@ -90,59 +92,59 @@ const HEALTH_CACHE_TTL = 5000; // 5 seconds
 /**
  * Pool event handlers for comprehensive monitoring
  */
-pool.on('connect', (client: PoolClient) => {
-  logger.info('📊 Database connection established', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_CONNECTION_ESTABLISHED',
+pool.on("connect", (client: PoolClient) => {
+  logger.info("📊 Database connection established", {
+    classification: "INTERNAL",
+    audit_event: "DB_CONNECTION_ESTABLISHED",
     total_connections: pool.totalCount,
     idle_connections: pool.idleCount,
-    waiting_connections: pool.waitingCount
+    waiting_connections: pool.waitingCount,
   });
 });
 
-pool.on('acquire', (client: PoolClient) => {
-  logger.debug('🔗 Database connection acquired', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_CONNECTION_ACQUIRED',
+pool.on("acquire", (client: PoolClient) => {
+  logger.debug("🔗 Database connection acquired", {
+    classification: "INTERNAL",
+    audit_event: "DB_CONNECTION_ACQUIRED",
     total_connections: pool.totalCount,
-    idle_connections: pool.idleCount
+    idle_connections: pool.idleCount,
   });
 });
 
-pool.on('release', (err: Error | undefined, client: PoolClient) => {
+pool.on("release", (err: Error | undefined, client: PoolClient) => {
   if (err) {
-    logger.error('💥 Database connection released with error', {
-      classification: 'HIGH',
-      audit_event: 'DB_CONNECTION_ERROR_RELEASE',
+    logger.error("💥 Database connection released with error", {
+      classification: "HIGH",
+      audit_event: "DB_CONNECTION_ERROR_RELEASE",
       error: err.message,
-      stack: err.stack
+      stack: err.stack,
     });
   } else {
-    logger.debug('✅ Database connection released', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_CONNECTION_RELEASED',
-      idle_connections: pool.idleCount
+    logger.debug("✅ Database connection released", {
+      classification: "INTERNAL",
+      audit_event: "DB_CONNECTION_RELEASED",
+      idle_connections: pool.idleCount,
     });
   }
 });
 
-pool.on('remove', (client: PoolClient) => {
-  logger.warn('🗑️ Database connection removed from pool', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_CONNECTION_REMOVED',
+pool.on("remove", (client: PoolClient) => {
+  logger.warn("🗑️ Database connection removed from pool", {
+    classification: "INTERNAL",
+    audit_event: "DB_CONNECTION_REMOVED",
     total_connections: pool.totalCount,
-    reason: 'Connection exceeded lifetime or failed validation'
+    reason: "Connection exceeded lifetime or failed validation",
   });
 });
 
-pool.on('error', (err: Error, client: PoolClient) => {
-  logger.error('💥 CRITICAL: Database pool error', {
-    classification: 'CRITICAL',
-    audit_event: 'DB_POOL_ERROR',
+pool.on("error", (err: Error, client: PoolClient) => {
+  logger.error("💥 CRITICAL: Database pool error", {
+    classification: "CRITICAL",
+    audit_event: "DB_POOL_ERROR",
     error: err.message,
     stack: err.stack,
     total_connections: pool.totalCount,
-    idle_connections: pool.idleCount
+    idle_connections: pool.idleCount,
   });
 });
 
@@ -156,18 +158,19 @@ async function executeQuery<T extends QueryResultRow = any>(
 ): Promise<QueryResult<T>> {
   const startTime = Date.now();
   const cid = correlationId || generateCorrelationId();
-  
+
   // Normalize query input
-  const query = typeof queryInput === 'string' 
-    ? { text: queryInput, values: params }
-    : queryInput;
-  
+  const query =
+    typeof queryInput === "string"
+      ? { text: queryInput, values: params }
+      : queryInput;
+
   // Sanitize query for logging (remove sensitive data)
   const sanitizedQuery = sanitizeQueryForLogging(query.text);
-  
-  logger.debug('🔍 Database query started', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_QUERY_STARTED',
+
+  logger.debug("🔍 Database query started", {
+    classification: "INTERNAL",
+    audit_event: "DB_QUERY_STARTED",
     query_type: getQueryType(query.text),
     query_hash: hashQuery(query.text),
     param_count: query.values?.length || 0,
@@ -175,59 +178,61 @@ async function executeQuery<T extends QueryResultRow = any>(
     pool_stats: {
       total: pool.totalCount,
       idle: pool.idleCount,
-      waiting: pool.waitingCount
-    }
+      waiting: pool.waitingCount,
+    },
   });
-  
+
   try {
     const result = await pool.query<T>(query);
     const duration = Date.now() - startTime;
-    
-    logger.info('✅ Database query completed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_QUERY_COMPLETED',
+
+    logger.info("✅ Database query completed", {
+      classification: "INTERNAL",
+      audit_event: "DB_QUERY_COMPLETED",
       query_type: getQueryType(query.text),
       query_hash: hashQuery(query.text),
       rows_affected: result.rowCount,
       rows_returned: result.rows.length,
       duration_ms: duration,
-      correlation_id: cid
+      correlation_id: cid,
     });
-    
+
     // Log slow queries for performance monitoring
-    if (duration > 1000) { // Queries over 1 second
-      logger.warn('🐌 Slow database query detected', {
-        classification: 'INTERNAL',
-        audit_event: 'DB_SLOW_QUERY',
+    if (duration > 1000) {
+      // Queries over 1 second
+      logger.warn("🐌 Slow database query detected", {
+        classification: "INTERNAL",
+        audit_event: "DB_SLOW_QUERY",
         query_type: getQueryType(query.text),
         duration_ms: duration,
         sanitized_query: sanitizedQuery,
-        correlation_id: cid
+        correlation_id: cid,
       });
     }
-    
+
     return result;
-    
   } catch (error) {
     const duration = Date.now() - startTime;
-    
-    logger.error('💥 Database query failed', {
-      classification: 'HIGH',
-      audit_event: 'DB_QUERY_FAILED',
+
+    logger.error("💥 Database query failed", {
+      classification: "HIGH",
+      audit_event: "DB_QUERY_FAILED",
       query_type: getQueryType(query.text),
       query_hash: hashQuery(query.text),
       error: error instanceof Error ? error.message : String(error),
       duration_ms: duration,
       correlation_id: cid,
-      sanitized_query: sanitizedQuery
+      sanitized_query: sanitizedQuery,
     });
-    
+
     // Re-throw with additional context
-    const enhancedError = new Error(`Database query failed: ${error instanceof Error ? error.message : String(error)}`);
+    const enhancedError = new Error(
+      `Database query failed: ${error instanceof Error ? error.message : String(error)}`
+    );
     (enhancedError as any).originalError = error;
     (enhancedError as any).correlationId = cid;
     (enhancedError as any).queryType = getQueryType(query.text);
-    
+
     throw enhancedError;
   }
 }
@@ -237,69 +242,68 @@ async function executeQuery<T extends QueryResultRow = any>(
  */
 async function getHealth(): Promise<DatabaseHealth> {
   const now = Date.now();
-  
+
   // Use cached health if recent
-  if (cachedHealth && (now - lastHealthCheck) < HEALTH_CACHE_TTL) {
+  if (cachedHealth && now - lastHealthCheck < HEALTH_CACHE_TTL) {
     return cachedHealth;
   }
-  
+
   const healthCheckStart = Date.now();
-  
+
   try {
     // Simple connectivity test
-    await pool.query('SELECT 1 as health_check, NOW() as server_time');
-    
+    await pool.query("SELECT 1 as health_check, NOW() as server_time");
+
     const latency = Date.now() - healthCheckStart;
     const uptime = Math.floor((now - poolStartTime) / 1000);
-    
+
     cachedHealth = {
-      status: latency > 5000 ? 'degraded' : 'healthy',
+      status: latency > 5000 ? "degraded" : "healthy",
       connections: {
         total: pool.totalCount,
         idle: pool.idleCount,
-        waiting: pool.waitingCount
+        waiting: pool.waitingCount,
       },
       latency_ms: latency,
-      uptime_seconds: uptime
+      uptime_seconds: uptime,
     };
-    
+
     lastHealthCheck = now;
-    
-    logger.debug('💗 Database health check completed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_HEALTH_CHECK_SUCCESS',
+
+    logger.debug("💗 Database health check completed", {
+      classification: "INTERNAL",
+      audit_event: "DB_HEALTH_CHECK_SUCCESS",
       status: cachedHealth.status,
       latency_ms: latency,
-      connections: cachedHealth.connections
+      connections: cachedHealth.connections,
     });
-    
+
     return cachedHealth;
-    
   } catch (error) {
     const latency = Date.now() - healthCheckStart;
-    
+
     cachedHealth = {
-      status: 'unhealthy',
+      status: "unhealthy",
       connections: {
         total: pool.totalCount,
         idle: pool.idleCount,
-        waiting: pool.waitingCount
+        waiting: pool.waitingCount,
       },
       latency_ms: latency,
       last_error: error instanceof Error ? error.message : String(error),
-      uptime_seconds: Math.floor((now - poolStartTime) / 1000)
+      uptime_seconds: Math.floor((now - poolStartTime) / 1000),
     };
-    
+
     lastHealthCheck = now;
-    
-    logger.error('💥 Database health check failed', {
-      classification: 'CRITICAL',
-      audit_event: 'DB_HEALTH_CHECK_FAILED',
+
+    logger.error("💥 Database health check failed", {
+      classification: "CRITICAL",
+      audit_event: "DB_HEALTH_CHECK_FAILED",
       error: error instanceof Error ? error.message : String(error),
       latency_ms: latency,
-      connections: cachedHealth.connections
+      connections: cachedHealth.connections,
     });
-    
+
     return cachedHealth;
   }
 }
@@ -313,38 +317,37 @@ async function withTransaction<T>(
 ): Promise<T> {
   const cid = correlationId || generateCorrelationId();
   const client = await pool.connect();
-  
+
   try {
-    await client.query('BEGIN');
-    
-    logger.debug('🔄 Database transaction started', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_TRANSACTION_STARTED',
-      correlation_id: cid
+    await client.query("BEGIN");
+
+    logger.debug("🔄 Database transaction started", {
+      classification: "INTERNAL",
+      audit_event: "DB_TRANSACTION_STARTED",
+      correlation_id: cid,
     });
-    
+
     const result = await callback(client);
-    
-    await client.query('COMMIT');
-    
-    logger.info('✅ Database transaction committed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_TRANSACTION_COMMITTED',
-      correlation_id: cid
+
+    await client.query("COMMIT");
+
+    logger.info("✅ Database transaction committed", {
+      classification: "INTERNAL",
+      audit_event: "DB_TRANSACTION_COMMITTED",
+      correlation_id: cid,
     });
-    
+
     return result;
-    
   } catch (error) {
-    await client.query('ROLLBACK');
-    
-    logger.error('💥 Database transaction rolled back', {
-      classification: 'HIGH',
-      audit_event: 'DB_TRANSACTION_ROLLBACK',
+    await client.query("ROLLBACK");
+
+    logger.error("💥 Database transaction rolled back", {
+      classification: "HIGH",
+      audit_event: "DB_TRANSACTION_ROLLBACK",
       error: error instanceof Error ? error.message : String(error),
-      correlation_id: cid
+      correlation_id: cid,
     });
-    
+
     throw error;
   } finally {
     client.release();
@@ -355,25 +358,25 @@ async function withTransaction<T>(
  * Graceful pool shutdown
  */
 async function shutdown(): Promise<void> {
-  logger.info('🔄 Database pool shutdown initiated', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_POOL_SHUTDOWN_STARTED'
+  logger.info("🔄 Database pool shutdown initiated", {
+    classification: "INTERNAL",
+    audit_event: "DB_POOL_SHUTDOWN_STARTED",
   });
-  
+
   try {
     await pool.end();
-    
-    logger.info('✅ Database pool shutdown completed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_POOL_SHUTDOWN_COMPLETED'
+
+    logger.info("✅ Database pool shutdown completed", {
+      classification: "INTERNAL",
+      audit_event: "DB_POOL_SHUTDOWN_COMPLETED",
     });
   } catch (error) {
-    logger.error('💥 Database pool shutdown error', {
-      classification: 'HIGH',
-      audit_event: 'DB_POOL_SHUTDOWN_ERROR',
-      error: error instanceof Error ? error.message : String(error)
+    logger.error("💥 Database pool shutdown error", {
+      classification: "HIGH",
+      audit_event: "DB_POOL_SHUTDOWN_ERROR",
+      error: error instanceof Error ? error.message : String(error),
     });
-    
+
     throw error;
   }
 }
@@ -387,14 +390,14 @@ function generateCorrelationId(): string {
 
 function getQueryType(query: string): string {
   const upperQuery = query.trim().toUpperCase();
-  if (upperQuery.startsWith('SELECT')) return 'SELECT';
-  if (upperQuery.startsWith('INSERT')) return 'INSERT';
-  if (upperQuery.startsWith('UPDATE')) return 'UPDATE';
-  if (upperQuery.startsWith('DELETE')) return 'DELETE';
-  if (upperQuery.startsWith('CREATE')) return 'CREATE';
-  if (upperQuery.startsWith('ALTER')) return 'ALTER';
-  if (upperQuery.startsWith('DROP')) return 'DROP';
-  return 'OTHER';
+  if (upperQuery.startsWith("SELECT")) return "SELECT";
+  if (upperQuery.startsWith("INSERT")) return "INSERT";
+  if (upperQuery.startsWith("UPDATE")) return "UPDATE";
+  if (upperQuery.startsWith("DELETE")) return "DELETE";
+  if (upperQuery.startsWith("CREATE")) return "CREATE";
+  if (upperQuery.startsWith("ALTER")) return "ALTER";
+  if (upperQuery.startsWith("DROP")) return "DROP";
+  return "OTHER";
 }
 
 function hashQuery(query: string): string {
@@ -402,7 +405,7 @@ function hashQuery(query: string): string {
   let hash = 0;
   for (let i = 0; i < query.length; i++) {
     const char = query.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(36);
@@ -418,9 +421,9 @@ function sanitizeQueryForLogging(query: string): string {
 }
 
 // Initialize pool monitoring
-logger.info('🗄️ Nuclear database pool initialized', {
-  classification: 'INTERNAL',
-  audit_event: 'DB_POOL_INITIALIZED',
+logger.info("🗄️ Nuclear database pool initialized", {
+  classification: "INTERNAL",
+  audit_event: "DB_POOL_INITIALIZED",
   config: {
     host: envConfig.pgHost,
     database: envConfig.pgDatabase,
@@ -428,8 +431,8 @@ logger.info('🗄️ Nuclear database pool initialized', {
     min_connections: poolConfig.min,
     max_connections: poolConfig.max,
     ssl_enabled: !!poolConfig.ssl,
-    application_name: poolConfig.application_name
-  }
+    application_name: poolConfig.application_name,
+  },
 });
 
 /**
@@ -439,16 +442,16 @@ logger.info('🗄️ Nuclear database pool initialized', {
 export default {
   // Core query interface (backward compatible)
   query: executeQuery,
-  
+
   // Enhanced interfaces
   executeQuery,
   withTransaction,
   getHealth,
   shutdown,
-  
+
   // Pool access for advanced operations
   pool,
-  
+
   // Utility functions
-  generateCorrelationId
+  generateCorrelationId,
 };

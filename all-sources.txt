@@ -1153,18 +1153,18 @@ function isStrongPassword(password: string): boolean {
 // src/config/db.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Database Configuration
- * 
+ *
  * Production-ready PostgreSQL connection pool with comprehensive monitoring
  * Implements security, reliability, and compliance controls
- * 
+ *
  * Classification: CONFIDENTIAL (database connection logic)
  * Retention: Service lifetime (operational requirement)
  * Review Date: Every 3 months (critical infrastructure)
  */
 
-import { Pool, PoolClient, QueryResult, PoolConfig, QueryResultRow } from 'pg';
-import envConfig from './envConfig';
-import logger from '../utils/logger';
+import { Pool, PoolClient, QueryResult, PoolConfig, QueryResultRow } from "pg";
+import envConfig from "./envConfig";
+import logger from "../utils/logger";
 
 /**
  * Database query interface for type safety
@@ -1179,7 +1179,7 @@ interface DatabaseQuery {
  * Database health status interface
  */
 interface DatabaseHealth {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy";
   connections: {
     total: number;
     idle: number;
@@ -1201,30 +1201,32 @@ const poolConfig: PoolConfig = {
   database: envConfig.pgDatabase,
   user: envConfig.pgUser,
   password: envConfig.pgPassword,
-  
   // Connection pool configuration
-  min: 2,                    // Minimum connections (always ready)
-  max: 20,                   // Maximum connections (prevent resource exhaustion)
-  idleTimeoutMillis: 30000,  // 30 seconds idle timeout
-  connectionTimeoutMillis: 5000, // 5 seconds connection timeout
-  
+  min: envConfig.pgMinConnections || 2,
+  max: envConfig.pgMaxConnections || 20,
+  idleTimeoutMillis: envConfig.pgIdleTimeoutMillis || 30000,
+  connectionTimeoutMillis: envConfig.pgConnectionTimeoutMillis || 5000,
+
   // SSL configuration (production security)
-  ssl: envConfig.nodeEnv === 'production' ? {
-    rejectUnauthorized: true,
-    ca: process.env.POSTGRES_CA_CERT,
-    cert: process.env.POSTGRES_CLIENT_CERT,
-    key: process.env.POSTGRES_CLIENT_KEY
-  } : false,
-  
+  ssl:
+    envConfig.nodeEnv === "production"
+      ? {
+          rejectUnauthorized: true,
+          ca: process.env.POSTGRES_CA_CERT,
+          cert: process.env.POSTGRES_CLIENT_CERT,
+          key: process.env.POSTGRES_CLIENT_KEY,
+        }
+      : false,
+
   // Application identification
   application_name: `${envConfig.serviceName}-${envConfig.nodeEnv}`,
-  
+
   // Connection validation
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
-  
+
   // Performance tuning
-  allowExitOnIdle: false     // Keep process alive
+  allowExitOnIdle: false, // Keep process alive
 };
 
 /**
@@ -1243,59 +1245,59 @@ const HEALTH_CACHE_TTL = 5000; // 5 seconds
 /**
  * Pool event handlers for comprehensive monitoring
  */
-pool.on('connect', (client: PoolClient) => {
-  logger.info('📊 Database connection established', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_CONNECTION_ESTABLISHED',
+pool.on("connect", (client: PoolClient) => {
+  logger.info("📊 Database connection established", {
+    classification: "INTERNAL",
+    audit_event: "DB_CONNECTION_ESTABLISHED",
     total_connections: pool.totalCount,
     idle_connections: pool.idleCount,
-    waiting_connections: pool.waitingCount
+    waiting_connections: pool.waitingCount,
   });
 });
 
-pool.on('acquire', (client: PoolClient) => {
-  logger.debug('🔗 Database connection acquired', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_CONNECTION_ACQUIRED',
+pool.on("acquire", (client: PoolClient) => {
+  logger.debug("🔗 Database connection acquired", {
+    classification: "INTERNAL",
+    audit_event: "DB_CONNECTION_ACQUIRED",
     total_connections: pool.totalCount,
-    idle_connections: pool.idleCount
+    idle_connections: pool.idleCount,
   });
 });
 
-pool.on('release', (err: Error | undefined, client: PoolClient) => {
+pool.on("release", (err: Error | undefined, client: PoolClient) => {
   if (err) {
-    logger.error('💥 Database connection released with error', {
-      classification: 'HIGH',
-      audit_event: 'DB_CONNECTION_ERROR_RELEASE',
+    logger.error("💥 Database connection released with error", {
+      classification: "HIGH",
+      audit_event: "DB_CONNECTION_ERROR_RELEASE",
       error: err.message,
-      stack: err.stack
+      stack: err.stack,
     });
   } else {
-    logger.debug('✅ Database connection released', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_CONNECTION_RELEASED',
-      idle_connections: pool.idleCount
+    logger.debug("✅ Database connection released", {
+      classification: "INTERNAL",
+      audit_event: "DB_CONNECTION_RELEASED",
+      idle_connections: pool.idleCount,
     });
   }
 });
 
-pool.on('remove', (client: PoolClient) => {
-  logger.warn('🗑️ Database connection removed from pool', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_CONNECTION_REMOVED',
+pool.on("remove", (client: PoolClient) => {
+  logger.warn("🗑️ Database connection removed from pool", {
+    classification: "INTERNAL",
+    audit_event: "DB_CONNECTION_REMOVED",
     total_connections: pool.totalCount,
-    reason: 'Connection exceeded lifetime or failed validation'
+    reason: "Connection exceeded lifetime or failed validation",
   });
 });
 
-pool.on('error', (err: Error, client: PoolClient) => {
-  logger.error('💥 CRITICAL: Database pool error', {
-    classification: 'CRITICAL',
-    audit_event: 'DB_POOL_ERROR',
+pool.on("error", (err: Error, client: PoolClient) => {
+  logger.error("💥 CRITICAL: Database pool error", {
+    classification: "CRITICAL",
+    audit_event: "DB_POOL_ERROR",
     error: err.message,
     stack: err.stack,
     total_connections: pool.totalCount,
-    idle_connections: pool.idleCount
+    idle_connections: pool.idleCount,
   });
 });
 
@@ -1309,18 +1311,19 @@ async function executeQuery<T extends QueryResultRow = any>(
 ): Promise<QueryResult<T>> {
   const startTime = Date.now();
   const cid = correlationId || generateCorrelationId();
-  
+
   // Normalize query input
-  const query = typeof queryInput === 'string' 
-    ? { text: queryInput, values: params }
-    : queryInput;
-  
+  const query =
+    typeof queryInput === "string"
+      ? { text: queryInput, values: params }
+      : queryInput;
+
   // Sanitize query for logging (remove sensitive data)
   const sanitizedQuery = sanitizeQueryForLogging(query.text);
-  
-  logger.debug('🔍 Database query started', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_QUERY_STARTED',
+
+  logger.debug("🔍 Database query started", {
+    classification: "INTERNAL",
+    audit_event: "DB_QUERY_STARTED",
     query_type: getQueryType(query.text),
     query_hash: hashQuery(query.text),
     param_count: query.values?.length || 0,
@@ -1328,59 +1331,61 @@ async function executeQuery<T extends QueryResultRow = any>(
     pool_stats: {
       total: pool.totalCount,
       idle: pool.idleCount,
-      waiting: pool.waitingCount
-    }
+      waiting: pool.waitingCount,
+    },
   });
-  
+
   try {
     const result = await pool.query<T>(query);
     const duration = Date.now() - startTime;
-    
-    logger.info('✅ Database query completed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_QUERY_COMPLETED',
+
+    logger.info("✅ Database query completed", {
+      classification: "INTERNAL",
+      audit_event: "DB_QUERY_COMPLETED",
       query_type: getQueryType(query.text),
       query_hash: hashQuery(query.text),
       rows_affected: result.rowCount,
       rows_returned: result.rows.length,
       duration_ms: duration,
-      correlation_id: cid
+      correlation_id: cid,
     });
-    
+
     // Log slow queries for performance monitoring
-    if (duration > 1000) { // Queries over 1 second
-      logger.warn('🐌 Slow database query detected', {
-        classification: 'INTERNAL',
-        audit_event: 'DB_SLOW_QUERY',
+    if (duration > 1000) {
+      // Queries over 1 second
+      logger.warn("🐌 Slow database query detected", {
+        classification: "INTERNAL",
+        audit_event: "DB_SLOW_QUERY",
         query_type: getQueryType(query.text),
         duration_ms: duration,
         sanitized_query: sanitizedQuery,
-        correlation_id: cid
+        correlation_id: cid,
       });
     }
-    
+
     return result;
-    
   } catch (error) {
     const duration = Date.now() - startTime;
-    
-    logger.error('💥 Database query failed', {
-      classification: 'HIGH',
-      audit_event: 'DB_QUERY_FAILED',
+
+    logger.error("💥 Database query failed", {
+      classification: "HIGH",
+      audit_event: "DB_QUERY_FAILED",
       query_type: getQueryType(query.text),
       query_hash: hashQuery(query.text),
       error: error instanceof Error ? error.message : String(error),
       duration_ms: duration,
       correlation_id: cid,
-      sanitized_query: sanitizedQuery
+      sanitized_query: sanitizedQuery,
     });
-    
+
     // Re-throw with additional context
-    const enhancedError = new Error(`Database query failed: ${error instanceof Error ? error.message : String(error)}`);
+    const enhancedError = new Error(
+      `Database query failed: ${error instanceof Error ? error.message : String(error)}`
+    );
     (enhancedError as any).originalError = error;
     (enhancedError as any).correlationId = cid;
     (enhancedError as any).queryType = getQueryType(query.text);
-    
+
     throw enhancedError;
   }
 }
@@ -1390,69 +1395,68 @@ async function executeQuery<T extends QueryResultRow = any>(
  */
 async function getHealth(): Promise<DatabaseHealth> {
   const now = Date.now();
-  
+
   // Use cached health if recent
-  if (cachedHealth && (now - lastHealthCheck) < HEALTH_CACHE_TTL) {
+  if (cachedHealth && now - lastHealthCheck < HEALTH_CACHE_TTL) {
     return cachedHealth;
   }
-  
+
   const healthCheckStart = Date.now();
-  
+
   try {
     // Simple connectivity test
-    await pool.query('SELECT 1 as health_check, NOW() as server_time');
-    
+    await pool.query("SELECT 1 as health_check, NOW() as server_time");
+
     const latency = Date.now() - healthCheckStart;
     const uptime = Math.floor((now - poolStartTime) / 1000);
-    
+
     cachedHealth = {
-      status: latency > 5000 ? 'degraded' : 'healthy',
+      status: latency > 5000 ? "degraded" : "healthy",
       connections: {
         total: pool.totalCount,
         idle: pool.idleCount,
-        waiting: pool.waitingCount
+        waiting: pool.waitingCount,
       },
       latency_ms: latency,
-      uptime_seconds: uptime
+      uptime_seconds: uptime,
     };
-    
+
     lastHealthCheck = now;
-    
-    logger.debug('💗 Database health check completed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_HEALTH_CHECK_SUCCESS',
+
+    logger.debug("💗 Database health check completed", {
+      classification: "INTERNAL",
+      audit_event: "DB_HEALTH_CHECK_SUCCESS",
       status: cachedHealth.status,
       latency_ms: latency,
-      connections: cachedHealth.connections
+      connections: cachedHealth.connections,
     });
-    
+
     return cachedHealth;
-    
   } catch (error) {
     const latency = Date.now() - healthCheckStart;
-    
+
     cachedHealth = {
-      status: 'unhealthy',
+      status: "unhealthy",
       connections: {
         total: pool.totalCount,
         idle: pool.idleCount,
-        waiting: pool.waitingCount
+        waiting: pool.waitingCount,
       },
       latency_ms: latency,
       last_error: error instanceof Error ? error.message : String(error),
-      uptime_seconds: Math.floor((now - poolStartTime) / 1000)
+      uptime_seconds: Math.floor((now - poolStartTime) / 1000),
     };
-    
+
     lastHealthCheck = now;
-    
-    logger.error('💥 Database health check failed', {
-      classification: 'CRITICAL',
-      audit_event: 'DB_HEALTH_CHECK_FAILED',
+
+    logger.error("💥 Database health check failed", {
+      classification: "CRITICAL",
+      audit_event: "DB_HEALTH_CHECK_FAILED",
       error: error instanceof Error ? error.message : String(error),
       latency_ms: latency,
-      connections: cachedHealth.connections
+      connections: cachedHealth.connections,
     });
-    
+
     return cachedHealth;
   }
 }
@@ -1466,38 +1470,37 @@ async function withTransaction<T>(
 ): Promise<T> {
   const cid = correlationId || generateCorrelationId();
   const client = await pool.connect();
-  
+
   try {
-    await client.query('BEGIN');
-    
-    logger.debug('🔄 Database transaction started', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_TRANSACTION_STARTED',
-      correlation_id: cid
+    await client.query("BEGIN");
+
+    logger.debug("🔄 Database transaction started", {
+      classification: "INTERNAL",
+      audit_event: "DB_TRANSACTION_STARTED",
+      correlation_id: cid,
     });
-    
+
     const result = await callback(client);
-    
-    await client.query('COMMIT');
-    
-    logger.info('✅ Database transaction committed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_TRANSACTION_COMMITTED',
-      correlation_id: cid
+
+    await client.query("COMMIT");
+
+    logger.info("✅ Database transaction committed", {
+      classification: "INTERNAL",
+      audit_event: "DB_TRANSACTION_COMMITTED",
+      correlation_id: cid,
     });
-    
+
     return result;
-    
   } catch (error) {
-    await client.query('ROLLBACK');
-    
-    logger.error('💥 Database transaction rolled back', {
-      classification: 'HIGH',
-      audit_event: 'DB_TRANSACTION_ROLLBACK',
+    await client.query("ROLLBACK");
+
+    logger.error("💥 Database transaction rolled back", {
+      classification: "HIGH",
+      audit_event: "DB_TRANSACTION_ROLLBACK",
       error: error instanceof Error ? error.message : String(error),
-      correlation_id: cid
+      correlation_id: cid,
     });
-    
+
     throw error;
   } finally {
     client.release();
@@ -1508,25 +1511,25 @@ async function withTransaction<T>(
  * Graceful pool shutdown
  */
 async function shutdown(): Promise<void> {
-  logger.info('🔄 Database pool shutdown initiated', {
-    classification: 'INTERNAL',
-    audit_event: 'DB_POOL_SHUTDOWN_STARTED'
+  logger.info("🔄 Database pool shutdown initiated", {
+    classification: "INTERNAL",
+    audit_event: "DB_POOL_SHUTDOWN_STARTED",
   });
-  
+
   try {
     await pool.end();
-    
-    logger.info('✅ Database pool shutdown completed', {
-      classification: 'INTERNAL',
-      audit_event: 'DB_POOL_SHUTDOWN_COMPLETED'
+
+    logger.info("✅ Database pool shutdown completed", {
+      classification: "INTERNAL",
+      audit_event: "DB_POOL_SHUTDOWN_COMPLETED",
     });
   } catch (error) {
-    logger.error('💥 Database pool shutdown error', {
-      classification: 'HIGH',
-      audit_event: 'DB_POOL_SHUTDOWN_ERROR',
-      error: error instanceof Error ? error.message : String(error)
+    logger.error("💥 Database pool shutdown error", {
+      classification: "HIGH",
+      audit_event: "DB_POOL_SHUTDOWN_ERROR",
+      error: error instanceof Error ? error.message : String(error),
     });
-    
+
     throw error;
   }
 }
@@ -1540,14 +1543,14 @@ function generateCorrelationId(): string {
 
 function getQueryType(query: string): string {
   const upperQuery = query.trim().toUpperCase();
-  if (upperQuery.startsWith('SELECT')) return 'SELECT';
-  if (upperQuery.startsWith('INSERT')) return 'INSERT';
-  if (upperQuery.startsWith('UPDATE')) return 'UPDATE';
-  if (upperQuery.startsWith('DELETE')) return 'DELETE';
-  if (upperQuery.startsWith('CREATE')) return 'CREATE';
-  if (upperQuery.startsWith('ALTER')) return 'ALTER';
-  if (upperQuery.startsWith('DROP')) return 'DROP';
-  return 'OTHER';
+  if (upperQuery.startsWith("SELECT")) return "SELECT";
+  if (upperQuery.startsWith("INSERT")) return "INSERT";
+  if (upperQuery.startsWith("UPDATE")) return "UPDATE";
+  if (upperQuery.startsWith("DELETE")) return "DELETE";
+  if (upperQuery.startsWith("CREATE")) return "CREATE";
+  if (upperQuery.startsWith("ALTER")) return "ALTER";
+  if (upperQuery.startsWith("DROP")) return "DROP";
+  return "OTHER";
 }
 
 function hashQuery(query: string): string {
@@ -1555,7 +1558,7 @@ function hashQuery(query: string): string {
   let hash = 0;
   for (let i = 0; i < query.length; i++) {
     const char = query.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(36);
@@ -1571,9 +1574,9 @@ function sanitizeQueryForLogging(query: string): string {
 }
 
 // Initialize pool monitoring
-logger.info('🗄️ Nuclear database pool initialized', {
-  classification: 'INTERNAL',
-  audit_event: 'DB_POOL_INITIALIZED',
+logger.info("🗄️ Nuclear database pool initialized", {
+  classification: "INTERNAL",
+  audit_event: "DB_POOL_INITIALIZED",
   config: {
     host: envConfig.pgHost,
     database: envConfig.pgDatabase,
@@ -1581,8 +1584,8 @@ logger.info('🗄️ Nuclear database pool initialized', {
     min_connections: poolConfig.min,
     max_connections: poolConfig.max,
     ssl_enabled: !!poolConfig.ssl,
-    application_name: poolConfig.application_name
-  }
+    application_name: poolConfig.application_name,
+  },
 });
 
 /**
@@ -1592,279 +1595,370 @@ logger.info('🗄️ Nuclear database pool initialized', {
 export default {
   // Core query interface (backward compatible)
   query: executeQuery,
-  
+
   // Enhanced interfaces
   executeQuery,
   withTransaction,
   getHealth,
   shutdown,
-  
+
   // Pool access for advanced operations
   pool,
-  
+
   // Utility functions
-  generateCorrelationId
+  generateCorrelationId,
 };
+
 // src/config/envConfig.ts
+// src/config/envConfig.ts - VERSIÓN SIMPLIFICADA CON SOPS
+import { spawn } from "child_process";
+import fs from "fs";
+import path from "path";
+import yaml from "js-yaml";
+import logger from "../utils/logger";
+
 /**
- * ?? CORE-BACKEND: Nuclear Environment Configuration
- * 
- * Centralized configuration management with security-first approach
- * All environment variables classified per ISO 27001 A.8.2.1
- * 
+ * 🚨 CORE-BACKEND: Nuclear Environment Configuration with SOPS
+ *
+ * Direct SOPS decryption without .env files
  * Classification: CONFIDENTIAL (contains sensitive configuration)
  * Retention: Service lifetime (operational requirement)
  * Review Date: Every 3 months (critical configuration)
  */
 
-import dotenv from 'dotenv';
-
-// Load environment variables with path validation
-const envPath = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
-dotenv.config({ path: envPath });
-
 /**
- * Environment configuration interface with strict typing
- * All properties are classified for compliance tracking
+ * Environment configuration interface
  */
 interface EnvironmentConfig {
-  // ?? Database Configuration (CRITICAL classification)
-  readonly pgHost: string;
-  readonly pgPort: number;
-  readonly pgDatabase: string;
-  readonly pgUser: string;
-  readonly pgPassword: string;
-  
-  // ?? Authentication Configuration (CRITICAL classification)
-  readonly jwtSecret: string;
-  
-  // ?? Service Configuration (HIGH classification)
-  readonly tenantId: string;
-  readonly serviceName: string;
-  
-  // ?? Network Configuration (INTERNAL classification)
-  readonly backendPort: number;
-  readonly backendHost: string;
-  
-  // ?? Environment Configuration (INTERNAL classification)
-  readonly nodeEnv: 'development' | 'test' | 'production';
-  readonly logLevel: 'debug' | 'info' | 'warn' | 'error';
-  
-  // ?? Integration Configuration (HIGH classification)
-  readonly coreEnvsPrivateUrl?: string;
-  readonly healthCheckInterval: number;
-  
-  // ?? External Authentication Configuration (HIGH classification)
-  readonly apiUrl?: string;
-  readonly authUrl?: string;
-  readonly authUsername?: string;
-  readonly authPassword?: string;
+  // 🔐 Database Configuration (CRITICAL)
+  pgHost: string;
+  pgPort: number;
+  pgDatabase: string;
+  pgUser: string;
+  pgPassword: string;
+  pgMinConnections: number;
+  pgIdleTimeoutMillis: number;
+  pgConnectionTimeoutMillis: number;
+  pgMaxConnections: number;
+
+  // 🔑 Authentication Configuration (CRITICAL)
+  jwtSecret: string;
+
+  // 🏢 Service Configuration (HIGH)
+  tenantId: string;
+  serviceName: string;
+  clientId: string;
+
+  // 🌐 Network Configuration (INTERNAL)
+  backendPort: number;
+  backendHost: string;
+
+  // 🌍 Environment Configuration (INTERNAL)
+  nodeEnv: "development" | "test" | "production";
+  logLevel: "debug" | "info" | "warn" | "error";
+
+  // 🔒 User Credentials for Auth (CRITICAL)
+  coreServicesUsername: string;
+  coreServicesPasswordHash: string;
+  adminUsername: string;
+  adminPasswordHash: string;
+
+  // 📊 Integration Configuration
+  healthCheckInterval: number;
+
+  // Metadata
+  configSource: string;
 }
 
 /**
- * Safe string conversion with validation
+ * Get client ID from CLI args or environment
  */
-function requireString(key: string, defaultValue?: string): string {
-  const value = process.env[key] || defaultValue;
-  if (!value) {
-    throw new Error(`Required environment variable ${key} is not set`);
-  }
-  return value;
-}
+const getClientId = (): string => {
+  const cliArgs = process.argv.slice(2);
+  const cliClientId = cliArgs.find((arg) => !arg.startsWith("--"));
 
-/**
- * Safe number conversion with validation
- */
-function requireNumber(key: string, defaultValue?: number): number {
-  const value = process.env[key];
-  if (!value && defaultValue === undefined) {
-    throw new Error(`Required environment variable ${key} is not set`);
+  if (cliClientId) {
+    logger.info(`Using CLIENT_ID from CLI: ${cliClientId}`);
+    return cliClientId;
   }
-  
-  const numValue = value ? parseInt(value, 10) : defaultValue!;
-  if (isNaN(numValue)) {
-    throw new Error(`Environment variable ${key} must be a valid number, got: ${value}`);
-  }
-  
-  return numValue;
-}
 
-/**
- * Safe enum conversion with validation
- */
-function requireEnum<T extends string>(
-  key: string, 
-  allowedValues: readonly T[], 
-  defaultValue?: T
-): T {
-  const value = process.env[key] || defaultValue;
-  if (!value) {
-    throw new Error(`Required environment variable ${key} is not set`);
+  if (process.env.CLIENT_ID) {
+    logger.info(`Using CLIENT_ID from ENV: ${process.env.CLIENT_ID}`);
+    return process.env.CLIENT_ID;
   }
-  
-  if (!allowedValues.includes(value as T)) {
-    throw new Error(
-      `Environment variable ${key} must be one of [${allowedValues.join(', ')}], got: ${value}`
-    );
-  }
-  
-  return value as T;
-}
 
-/**
- * Nuclear environment configuration
- * Fail-fast validation with comprehensive error messages
- */
-const envConfig: EnvironmentConfig = {
-  // ?? Database Configuration (CRITICAL - ISO 27001 A.8.2.1)
-  pgHost: requireString('PGHOST'),
-  pgPort: requireNumber('PGPORT', 5432),
-  pgDatabase: requireString('PGDATABASE'),
-  pgUser: requireString('PGUSER'),
-  pgPassword: requireString('PGPASSWORD'),
-  
-  // ?? Authentication Configuration (CRITICAL - ISO 27001 A.9.4.1)
-  jwtSecret: requireString('JWT_SECRET'),
-  
-  // ?? Service Configuration (HIGH - Business Critical)
-  tenantId: requireString('TENANT_ID'),
-  serviceName: requireString('SERVICE_NAME', 'core-backend'),
-  
-  // ?? Network Configuration (INTERNAL - Operational)
-  backendPort: requireNumber('BACKEND_PORT', 3000),
-  backendHost: requireString('BACKEND_HOST', '0.0.0.0'),
-  
-  // ?? Environment Configuration (INTERNAL - Operational)
-  nodeEnv: requireEnum('NODE_ENV', ['development', 'test', 'production'] as const, 'development'),
-  logLevel: requireEnum('LOG_LEVEL', ['debug', 'info', 'warn', 'error'] as const, 'info'),
-  
-  // ?? Integration Configuration (HIGH - External Dependencies)
-  coreEnvsPrivateUrl: process.env.CORE_ENVS_PRIVATE_URL,
-  healthCheckInterval: requireNumber('HEALTH_CHECK_INTERVAL', 60000), // 1 minute default
-  
-  // ?? External Authentication Configuration (HIGH - External API)
-  apiUrl: process.env.API_URL,
-  authUrl: process.env.AUTH_URL,
-  authUsername: process.env.AUTH_USERNAME,
-  authPassword: process.env.AUTH_PASSWORD,
+  logger.info(`Using default CLIENT_ID: core-dev`);
+  return "core-dev";
 };
 
 /**
- * Configuration validation for security compliance
- * Validates configuration against security requirements
+ * Get GPG passphrase from environment or CLI argument
  */
-function validateSecurityRequirements(config: EnvironmentConfig): void {
-  // JWT Secret strength validation
-  if (config.jwtSecret.length < 32) {
-    throw new Error('JWT_SECRET must be at least 32 characters for security compliance');
+const getGPGPassphrase = (): string => {
+  if (process.env.GPG_PASSPHRASE) {
+    logger.info("Using GPG passphrase from environment");
+    return process.env.GPG_PASSPHRASE;
   }
-  
-  if (config.jwtSecret === 'default_secret_dangerous') {
-    throw new Error('Default JWT_SECRET is not allowed in any environment');
+
+  const passphraseArg = process.argv.find((arg) =>
+    arg.startsWith("--gpg-passphrase=")
+  );
+  if (passphraseArg) {
+    logger.info("Using GPG passphrase from CLI argument");
+    return passphraseArg.split("=")[1];
   }
-  
-  // Production-specific validations
-  if (config.nodeEnv === 'production') {
-    // Database security in production
-    if (config.pgHost === 'localhost' || config.pgHost === '127.0.0.1') {
-      throw new Error('Production environment cannot use localhost database');
-    }
-    
-    if (config.pgPassword.length < 12) {
-      throw new Error('Production database password must be at least 12 characters');
-    }
-    
-    // Network security in production
-    if (config.backendPort < 1024) {
-      console.warn('?? WARNING: Using privileged port in production requires root privileges');
-    }
-  }
-  
-  // Development-specific validations
-  if (config.nodeEnv === 'development') {
-    if (!config.pgHost.includes('localhost') && !config.pgHost.includes('127.0.0.1') && !config.pgHost.includes('dev')) {
-      console.warn('?? WARNING: Development environment connecting to non-local database');
-    }
-  }
-}
+
+  throw new Error(
+    "GPG passphrase not found. Set GPG_PASSPHRASE env var or use --gpg-passphrase=xxx"
+  );
+};
 
 /**
- * Configuration classification for compliance tracking
- * Maps each configuration property to its ISO 27001 classification
+ * Get SOPS binary path
  */
-export const CONFIG_CLASSIFICATION = {
-  // CRITICAL classification (A.8.2.1 - Highest security requirements)
-  pgPassword: 'CRITICAL',
-  jwtSecret: 'CRITICAL',
-  
-  // HIGH classification (Significant business impact)
-  pgHost: 'HIGH',
-  pgUser: 'HIGH',
-  pgDatabase: 'HIGH',
-  tenantId: 'HIGH',
-  coreEnvsPrivateUrl: 'HIGH',
-  apiUrl: 'HIGH',
-  authUrl: 'HIGH',
-  authUsername: 'HIGH',
-  authPassword: 'HIGH',
-  
-  // INTERNAL classification (Internal operational data)
-  pgPort: 'INTERNAL',
-  serviceName: 'INTERNAL',
-  backendPort: 'INTERNAL',
-  backendHost: 'INTERNAL',
-  nodeEnv: 'INTERNAL',
-  logLevel: 'INTERNAL',
-  healthCheckInterval: 'INTERNAL',
-} as const;
+const getSopsPath = (envsRepoPath: string): string => {
+  // Windows path
+  if (process.platform === "win32") {
+    const winPath = path.join(envsRepoPath, "tools/win64/sops.exe");
+    if (fs.existsSync(winPath)) return winPath;
+  }
+
+  // Linux/Mac - assume sops is in PATH
+  return "sops";
+};
 
 /**
- * Get configuration value with classification context
- * Used for audit logging and compliance tracking
+ * Decrypt SOPS file using spawn
  */
-export function getConfigWithClassification(key: keyof EnvironmentConfig): {
-  value: any;
-  classification: string;
-  auditRequired: boolean;
-} {
-  const value = envConfig[key];
-  const classification = CONFIG_CLASSIFICATION[key] || 'INTERNAL';
-  const auditRequired = classification === 'CRITICAL' || classification === 'HIGH';
-  
-  // Never log CRITICAL values
-  const safeValue = classification === 'CRITICAL' ? '[REDACTED]' : value;
-  
-  return {
-    value: safeValue,
-    classification,
-    auditRequired
-  };
-}
+const decryptSopsAsync = async (
+  sopsPath: string,
+  secretsPath: string,
+  gpgPassphrase: string
+): Promise<string> => {
+  logger.info("🔓 Decrypting SOPS file...");
+
+  return new Promise((resolve, reject) => {
+    const gnupgHome =
+      process.env.GNUPGHOME ||
+      (process.platform === "win32"
+        ? path.join(process.env.APPDATA!, "gnupg")
+        : path.join(process.env.HOME!, ".gnupg"));
+
+    const sopsProcess = spawn(
+      sopsPath,
+      ["-d", "--output-type", "json", secretsPath],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          GNUPGHOME: gnupgHome,
+          GPG_PASSPHRASE: gpgPassphrase,
+          GPG_TTY: process.platform === "win32" ? undefined : "/dev/null",
+          GPG_BATCH: "1",
+        },
+        shell: true,
+        windowsHide: true,
+      }
+    );
+
+    let stdout = "";
+    let stderr = "";
+
+    sopsProcess.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    sopsProcess.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    sopsProcess.on("close", (code) => {
+      if (code === 0) {
+        logger.info("✅ SOPS decryption successful");
+        resolve(stdout);
+      } else {
+        logger.error("💥 SOPS decryption failed", {
+          exit_code: code,
+          stderr: stderr,
+        });
+        reject(new Error(`SOPS decryption failed: ${stderr}`));
+      }
+    });
+
+    sopsProcess.on("error", (error) => {
+      logger.error("💥 SOPS process error", {
+        error: error.message,
+      });
+      reject(error);
+    });
+  });
+};
 
 /**
- * Validate configuration on module load
- * Ensures all requirements are met before service starts
+ * Load configuration using SOPS
  */
-try {
-  validateSecurityRequirements(envConfig);
-} catch (error) {
-  console.error('?? CRITICAL: Environment configuration validation failed');
-  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  console.error('Service cannot start with invalid configuration');
-  process.exit(1);
-}
+const loadConfig = async (): Promise<EnvironmentConfig> => {
+  logger.info("🔧 Loading config via SOPS");
 
-// Log successful configuration load (without sensitive data)
-console.log('? Nuclear environment configuration loaded successfully', {
-  nodeEnv: envConfig.nodeEnv,
-  serviceName: envConfig.serviceName,
-  backendPort: envConfig.backendPort,
-  pgHost: envConfig.pgHost.includes('localhost') ? 'localhost' : '[REDACTED]',
-  configClassifications: Object.keys(CONFIG_CLASSIFICATION).length,
-  timestamp: new Date().toISOString()
-});
+  const clientId = getClientId();
+  const gpgPassphrase = getGPGPassphrase();
 
-export default envConfig;
+  const envsRepoPath = path.resolve(__dirname, "../../../core-envs-private");
+
+  if (!fs.existsSync(envsRepoPath)) {
+    throw new Error(`core-envs-private repo not found at: ${envsRepoPath}`);
+  }
+
+  logger.info(`📁 Using repo: ${envsRepoPath}`);
+
+  try {
+    // 1. Load config.yaml (public configuration)
+    const yamlPath = path.join(envsRepoPath, `clients/${clientId}/config.yaml`);
+    if (!fs.existsSync(yamlPath)) {
+      throw new Error(`Client config.yaml not found: ${clientId}`);
+    }
+
+    const yamlFile = fs.readFileSync(yamlPath, "utf8");
+    const yamlParsed = yaml.load(yamlFile) as Record<string, any>;
+
+    logger.info("✅ config.yaml loaded");
+
+    // 2. Decrypt secrets.sops.yaml
+    const secretsPath = path.join(
+      envsRepoPath,
+      `clients/${clientId}/secrets.sops.yaml`
+    );
+    if (!fs.existsSync(secretsPath)) {
+      throw new Error(`Client secrets.sops.yaml not found: ${clientId}`);
+    }
+
+    const sopsPath = getSopsPath(envsRepoPath);
+    const decryptOutput = await decryptSopsAsync(
+      sopsPath,
+      secretsPath,
+      gpgPassphrase
+    );
+    const secretsConfig = JSON.parse(decryptOutput);
+
+    logger.info("✅ Secrets decrypted successfully");
+
+    // 3. Map to EnvironmentConfig
+    const config: EnvironmentConfig = {
+      // Database Configuration - TODO COMPLETO
+      pgHost: yamlParsed.pg_host || "localhost",
+      pgPort: parseInt(yamlParsed.pg_port || "5432"),
+      pgDatabase: yamlParsed.pg_database || "core_backend_db",
+      pgUser: secretsConfig.pg_user || yamlParsed.pg_user,
+      pgPassword: secretsConfig.pg_password,
+
+      // Connection pool
+      pgMinConnections: parseInt(yamlParsed.pg_min_connections || "2"),
+      pgMaxConnections: parseInt(yamlParsed.pg_max_connections || "20"),
+      pgIdleTimeoutMillis: parseInt(
+        yamlParsed.pg_idle_timeout_millis || "30000"
+      ),
+      pgConnectionTimeoutMillis: parseInt(
+        yamlParsed.pg_connection_timeout_millis || "5000"
+      ),
+      // Authentication Configuration
+      jwtSecret: secretsConfig.jwt_secret || secretsConfig.internal_jwt_secret,
+
+      // Service Configuration
+      tenantId: secretsConfig.tenant_id || yamlParsed.tenant_id || clientId,
+      serviceName: yamlParsed.service_name || "core-backend",
+      clientId: clientId,
+
+      // Network Configuration
+      backendPort: parseInt(yamlParsed.backend_port || "3000"),
+      backendHost: yamlParsed.backend_host || "0.0.0.0",
+
+      // Environment Configuration
+      nodeEnv: (yamlParsed.node_env || "development") as any,
+      logLevel: (yamlParsed.log_level || "info") as any,
+
+      // User Credentials
+      coreServicesUsername:
+        secretsConfig.core_services_username || "core-services",
+      coreServicesPasswordHash: secretsConfig.core_services_password_hash,
+      adminUsername: secretsConfig.admin_username || "admin",
+      adminPasswordHash: secretsConfig.admin_password_hash,
+
+      // Integration Configuration
+      healthCheckInterval: parseInt(
+        yamlParsed.health_check_interval || "60000"
+      ),
+
+      // Metadata
+      configSource: "SOPS_ONLY",
+    };
+
+    // Validate critical fields
+    if (!config.pgPassword)
+      throw new Error("Database password not found in secrets");
+    if (!config.jwtSecret) throw new Error("JWT secret not found in secrets");
+    if (!config.coreServicesPasswordHash && !config.adminPasswordHash) {
+      throw new Error("At least one user credential must be configured");
+    }
+
+    logger.info("✅ Config loaded successfully via SOPS", {
+      clientId: config.clientId,
+      serviceName: config.serviceName,
+      configSource: config.configSource,
+    });
+
+    return config;
+  } catch (error) {
+    logger.error("💥 Config loading failed:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      classification: "CRITICAL",
+      incident_type: "CONFIG_LOAD_FAILURE",
+    });
+    throw error;
+  }
+};
+
+// Create singleton config
+let cachedConfig: EnvironmentConfig | null = null;
+
+/**
+ * Get configuration (cached after first load)
+ */
+export const getConfig = async (): Promise<EnvironmentConfig> => {
+  if (!cachedConfig) {
+    cachedConfig = await loadConfig();
+  }
+  return cachedConfig;
+};
+
+/**
+ * Synchronous config getter (throws if not loaded)
+ */
+export const getConfigSync = (): EnvironmentConfig => {
+  if (!cachedConfig) {
+    throw new Error("Configuration not loaded. Call getConfig() first");
+  }
+  return cachedConfig;
+};
+
+// Initialize config on module load
+(async () => {
+  try {
+    await getConfig();
+  } catch (error) {
+    logger.error("💥 Failed to initialize configuration:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      classification: "CRITICAL",
+      incident_type: "CONFIG_INIT_FAILURE",
+    });
+    process.exit(1);
+  }
+})();
+
+// Export default for backward compatibility
+export default getConfigSync();
+
 // src/config/express.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Express Configuration
@@ -2288,6 +2382,8 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import envConfig from '../config/envConfig';
 import logger from '../utils/logger';
+import { getConfigSync } from '../config/envConfig';
+import rawUsers from '../config/users.json';
 
 /**
  * User record interface with security context
@@ -2302,6 +2398,12 @@ interface UserRecord {
   readonly failed_attempts: number;
   readonly locked_until?: string;
 }
+
+interface UserJsonRecord {
+  password: string;  // en el JSON se llama "password", no "password_hash"
+  role: string;
+}
+
 
 /**
  * JWT payload interface
@@ -2330,24 +2432,51 @@ interface AuthResponse {
 }
 
 /**
+ * Load users from JSON file
+ * TODO: TEMPORAL - Migrar a SOPS cuando esté listo
+ */
+function loadUsersFromJson(): Record<string, UserRecord> {
+  const jsonUsers = rawUsers as Record<string, UserJsonRecord>;
+  const users: Record<string, UserRecord> = {};
+  
+  // Convertir formato JSON al formato esperado
+  Object.entries(jsonUsers).forEach(([username, userData]) => {
+    users[username] = {
+      username,
+      password_hash: userData.password, // en el JSON se llama "password"
+      role: userData.role,
+      enabled: true,
+      created_at: new Date().toISOString(),
+      failed_attempts: 0
+    };
+  });
+  
+  logger.info('✅ Users loaded from JSON', {
+    classification: 'HIGH',
+    audit_event: 'USERS_LOADED',
+    user_count: Object.keys(users).length,
+    usernames: Object.keys(users) // Safe to log usernames
+  });
+  
+  return users;
+}
+
+
+
+/**
  * Load users from core-envs-private configuration
  * This will be replaced with actual core-envs-private integration
  * For now, uses environment variables with secure defaults
  */
 function loadUsersFromCoreEnvs(): Record<string, UserRecord> {
-  // TODO: Replace with actual core-envs-private integration
-  // For development, load from environment variables
-  
+  const config = getConfigSync(); // Usar el config de SOPS
   const users: Record<string, UserRecord> = {};
   
-  // Core services user (primary service account)
-  const coreServicesUsername = process.env.CORE_SERVICES_USERNAME || 'core-services';
-  const coreServicesPassword = process.env.CORE_SERVICES_PASSWORD_HASH;
-  
-  if (coreServicesPassword) {
-    users[coreServicesUsername] = {
-      username: coreServicesUsername,
-      password_hash: coreServicesPassword,
+  // Core services user
+  if (config.coreServicesPasswordHash) {
+    users[config.coreServicesUsername] = {
+      username: config.coreServicesUsername,
+      password_hash: config.coreServicesPasswordHash,
       role: 'service',
       enabled: true,
       created_at: new Date().toISOString(),
@@ -2355,38 +2484,17 @@ function loadUsersFromCoreEnvs(): Record<string, UserRecord> {
     };
   }
   
-  // Admin user (for administrative access)
-  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminPassword = process.env.ADMIN_PASSWORD_HASH;
-  
-  if (adminPassword) {
-    users[adminUsername] = {
-      username: adminUsername,
-      password_hash: adminPassword,
+  // Admin user
+  if (config.adminPasswordHash) {
+    users[config.adminUsername] = {
+      username: config.adminUsername,
+      password_hash: config.adminPasswordHash,
       role: 'admin',
       enabled: true,
       created_at: new Date().toISOString(),
       failed_attempts: 0
     };
   }
-  
-  // Validate at least one user exists
-  if (Object.keys(users).length === 0) {
-    logger.error('💥 CRITICAL: No users configured for authentication', {
-      classification: 'CRITICAL',
-      audit_event: 'NO_USERS_CONFIGURED',
-      security_impact: 'AUTHENTICATION_UNAVAILABLE'
-    });
-    
-    throw new Error('No authentication users configured');
-  }
-  
-  logger.info('✅ Users loaded from configuration', {
-    classification: 'HIGH',
-    audit_event: 'USERS_LOADED',
-    user_count: Object.keys(users).length,
-    usernames: Object.keys(users) // Safe to log usernames
-  });
   
   return users;
 }
@@ -2408,7 +2516,8 @@ function getUsers(): Record<string, UserRecord> {
   }
   
   try {
-    cachedUsers = loadUsersFromCoreEnvs();
+    // TEMPORAL - Usar JSON en lugar de SOPS
+    cachedUsers = loadUsersFromJson();
     lastUserLoad = now;
     return cachedUsers;
   } catch (error) {
@@ -4452,77 +4561,6 @@ export const auditLoggerMiddleware = (req: Request, res: Response, next: NextFun
 // Export instance and default
 export { nuclearAuditLogger };
 export default nuclearAuditLogger;
-// src/middlewares/auth.ts
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-// Secret key used to sign and verify JWTs
-const SECRET = process.env.JWT_SECRET || 'default_secret_dangerous';
-
-// Middleware to authenticate requests using JWT
-export const authenticateJWT = (req: Request, res: Response, next: NextFunction) => {
-  // Read the Authorization header from the request
-  const authHeader = req.headers.authorization;
-
-  // Check if the header exists and follows the Bearer token format
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    // Extract the token from the header
-    const token = authHeader.split(' ')[1];
-
-    // Verify the token using the configured secret
-    jwt.verify(token, SECRET, (err, user) => {
-      if (err) {
-        // Token is invalid or expired
-        return res.status(403).json({ error: 'Invalid or expired token' });
-      }
-
-      // Token is valid; attach user info to the request object
-      (req as any).user = user;
-
-      // Proceed to the next middleware or route handler
-      next();
-    });
-  } else {
-    // Authorization header is missing or not formatted correctly
-    return res.status(401).json({ error: 'Authorization header missing or malformed' });
-  }
-};
-
-// src/middlewares/authenticateJWT.ts
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import config from '../config/envConfig';
-
-// Extend Express Request interface to include 'user'
-declare global {
-  namespace Express {
-    interface Request {
-      user?: any;
-    }
-  }
-}
-
-export function authenticateJWT(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid token' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
-  try {
-    if (!config.jwtSecret) {
-      return res.status(500).json({ error: 'JWT secret is not configured' });
-    }
-    const payload = jwt.verify(token, config.jwtSecret as string);
-    req.user = payload;
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}
-
 // src/middlewares/authentication.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Authentication Middleware
@@ -5345,42 +5383,6 @@ export const loginLimiter = rateLimit({
   message: 'Too many login attempts. Please try again in 1 minutes.'
 });
 
-// src/routes/appRoutes.ts
-import express from "express";
-import { generateLogEmitter } from "../controllers/log/emitter";
-import { authenticateJWT } from "../middlewares/auth";
-import { authorizeAdmin } from "../middlewares/authorizeAdmin";
-import { receiveMetrics } from "../controllers/metrics/receive";
-//import { receiveHeartbeat } from "../controllers/heartbeat/receive";
-
-const configureRouter = (app: express.Application) => {
-  app.get("/health", (req, res) => {
-    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-
-  // Define the routes for PDF, ZPL, email, and log generation
-  // These routes are protected by JWT authentication and admin authorization
-  // The authenticateJWT middleware checks the JWT token in the request header
-  // The authorizeAdmin middleware checks if the user has admin privileges
-
-
-  // Route to emit logs
-  app.post("/emit-log", authenticateJWT, authorizeAdmin, generateLogEmitter);
-
-  // Route to receive metrics
-  // This route allows clients to send metrics data to the server
-  // The receiveMetrics controller processes the incoming metrics data
-  app.post("/api/metrics", authenticateJWT, authorizeAdmin, receiveMetrics);
-
-  // Route to receive heartbeat signals
-  // This route allows services to send heartbeat signals to the server
-  // The receiveHeartbeat controller processes the incoming heartbeat data
-  //app.post("/api/heartbeat", authenticateJWT, authorizeAdmin, receiveHeartbeat);
-
-};
-
-export default configureRouter;
-
 // src/routes/authRoutes.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Authentication Routes
@@ -5680,7 +5682,7 @@ import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import { Request, Response, NextFunction } from 'express';
 import { emitLog, logHealthCheck } from '../controllers/logController';
-import { authenticateJWT } from '../middlewares/authenticateJWT';
+import { authenticateRequest as authenticateJWT } from '../middlewares/authentication';
 import logger from '../utils/logger';
 import nuclearAuditLogger from '../middlewares/auditLogger';
 
@@ -6075,75 +6077,6 @@ router.use('*', (req: Request, res: Response) => {
 });
 
 export default router;
-// src/services/heartbeatEmitter.ts
-import axios from "axios";
-import config from "../config/envConfig";
-import os from "os";
-import { getAuthToken } from "../utils/getToken";
-
-let first = true;
-
-export const startHeartbeat = () => {
-  setInterval(async () => {
-    try {
-      const uptime = Math.floor(process.uptime());
-      const memoryRssMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
-      const heapUsedMb = Math.round(
-        process.memoryUsage().heapUsed / 1024 / 1024
-      );
-      const cpuUsage = process.cpuUsage();
-      const cpuUserMs = Math.round(cpuUsage.user / 1000);
-      const cpuSystemMs = Math.round(cpuUsage.system / 1000);
-      const hostname = os.hostname();
-      const loadAvg = os.loadavg();
-      const cpuLoad1m =
-        loadAvg[0] > 0 ? parseFloat(loadAvg[0].toFixed(2)) : undefined;
-
-      const metadata: Record<string, any> = {
-        uptime_sec: uptime,
-        memory_rss_mb: memoryRssMb,
-        heap_used_mb: heapUsedMb,
-        cpu_user_ms: cpuUserMs,
-        cpu_system_ms: cpuSystemMs,
-        hostname,
-      };
-
-      if (cpuLoad1m !== undefined) {
-        metadata.cpu_load_1m = cpuLoad1m;
-      }
-
-      const payload = {
-        client_id: config.tenantId,
-        service: config.serviceName || "core_services",
-        timestamp: new Date().toISOString(),
-        status: first ? "STARTUP" : "OK",
-        metadata,
-      };
-
-      if (first) {
-        payload.status = "STARTUP";
-        first = false;
-      }
-
-      const token = await getAuthToken();
-      await axios.post(`${config.apiUrl}/heartbeat`, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      console.log("✅ Heartbeat sent:", payload.status);
-    } catch (err: any) {
-      if (axios.isAxiosError(err)) {
-        console.error("❌ Axios error:", err.response?.data || err.message);
-      } else {
-        console.error("❌ Unknown error:", err);
-      }
-    }
-  }, 60000); //every 60 seconds
-  console.log("Heartbeat emitter started, sending every 1 minute");
-};
-
 // src/services/retentionService.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Data Retention Service
@@ -6752,50 +6685,6 @@ export default {
   getRetentionServiceStatus,
   manualRetentionCleanup
 };
-// src/utils/getToken.ts
-import axios from "axios";
-import config from "../config/envConfig";
-
-let cachedToken = "";
-let tokenExpiresAt = 0;
-
-export async function getAuthToken(): Promise<string> {
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiresAt) {
-    return cachedToken;
-  }
-
-  try {
-    
-    if (!config.authUrl || !config.authUsername || !config.authPassword) {
-      throw new Error("Missing authentication configuration");
-    }
-
-    console.log("🔑 Requesting new auth token...");
-    console.log("🔑 Auth URL:", config.authUrl);
-    console.log("🔑 Auth Username:", config.authUsername);
-    console.log("🔑 Auth Password:", config.authPassword);
-
-    const response = await axios.post(`${config.authUrl}`, {
-      username: config.authUsername,
-      password: config.authPassword,
-    });
-
-    if (response.status !== 200 || !response.data?.token) {
-      throw new Error("Invalid response from auth server");
-    }
-
-    cachedToken = response.data.token;
-    const expiresIn = response.data.expiresIn || 3600; // en segundos
-    tokenExpiresAt = now + expiresIn * 1000 - 10000; // 10s de margen
-
-    return cachedToken;
-  } catch (err: any) {
-    console.error("❌ Failed to get auth token:", err.response?.data || err.message);
-    throw new Error("Authentication failed");
-  }
-}
-
 // src/utils/gracefulShutdown.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Graceful Shutdown
@@ -7617,6 +7506,10 @@ export default logger;
     "admin": {
       "password": "$2a$12$XovTOF4pkAY7RgW2VabJceEgNQPk.TjDmWxbwno5fWaL2wgHmBwjy", 
       "role": "admin"
+    },
+    "core-services": {
+      "password": "$2b$10$KpDVZqjI8DrlXwK5kqTste5yN0LxwOEQdGXvvPYpDhU0TSvb2Gjkm",
+      "role": "service"
     }
   }
   

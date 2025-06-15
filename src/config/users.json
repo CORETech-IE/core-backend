@@ -1,0 +1,11 @@
+{
+    "admin": {
+      "password": "$2b$10$uG04ERbDRWD/3AuCRu79Lutrs0CeL9MgcTSWLe2VE3y4lRmV5hcHW", 
+      "role": "admin"
+    },
+    "core-services": {
+      "password": "$2b$10$pX2.G60QS5PTgVGLEsAly.DuSwx5PTGyyM936wwywUX9cp/1frrdG",
+      "role": "service"
+    }
+  }
+  
