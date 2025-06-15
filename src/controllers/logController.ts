@@ -246,7 +246,7 @@ export const emitLog = async (req: Request, res: Response): Promise<void> => {
     
     // 🗄️ STEP 3: Database insertion with transaction
     const insertQuery = `
-      INSERT INTO logs (
+      INSERT INTO core_dev.logs (
         tenant_name, service, timestamp, level, message, 
         tags, context, trace_id, classification, 
         retention_until, created_at

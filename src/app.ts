@@ -7,6 +7,7 @@ import logRoutes from './routes/logRoutes';
 import { errorHandler } from './middlewares/errorHandler';
 import logger from './utils/logger';
 import { getConfig } from './config/envConfig';
+import heartbeatRoutes from './routes/heartbeatRoutes';
 
 async function startService(): Promise<void> {
   try {
@@ -20,9 +21,11 @@ async function startService(): Promise<void> {
     // Configurar middleware
     configureExpress(app);
     
-    // Rutas
+    // Rutas: from more specific to less specifiv
+    app.use('/api/heartbeat', heartbeatRoutes);
     app.use('/auth', authRoutes);
     app.use('/api', logRoutes);
+    
     
     // Error handler
     app.use(errorHandler);
