@@ -3,7 +3,7 @@ import { generateLogEmitter } from "../controllers/log/emitter";
 import { authenticateJWT } from "../middlewares/auth";
 import { authorizeAdmin } from "../middlewares/authorizeAdmin";
 import { receiveMetrics } from "../controllers/metrics/receive";
-import { receiveHeartbeat } from "../controllers/heartbeat/receive";
+//import { receiveHeartbeat } from "../controllers/heartbeat/receive";
 
 const configureRouter = (app: express.Application) => {
   app.get("/health", (req, res) => {
@@ -27,7 +27,7 @@ const configureRouter = (app: express.Application) => {
   // Route to receive heartbeat signals
   // This route allows services to send heartbeat signals to the server
   // The receiveHeartbeat controller processes the incoming heartbeat data
-  app.post("/api/heartbeat", authenticateJWT, authorizeAdmin, receiveHeartbeat);
+  //app.post("/api/heartbeat", authenticateJWT, authorizeAdmin, receiveHeartbeat);
 
 };
 
