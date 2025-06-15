@@ -61,6 +61,7 @@
     "zod": "^3.25.23"
   },
   "devDependencies": {
+    "@types/axios": "^0.14.4",
     "@types/bcrypt": "^5.0.2",
     "@types/compression": "^1.8.0",
     "@types/cors": "^2.8.18",

@@ -14,7 +14,7 @@ import rateLimit from 'express-rate-limit';
 import { body, validationResult } from 'express-validator';
 import { Request, Response, NextFunction } from 'express';
 import { emitLog, logHealthCheck } from '../controllers/logController';
-import { authenticateJWT } from '../middlewares/authenticateJWT';
+import { authenticateRequest as authenticateJWT } from '../middlewares/authentication';
 import logger from '../utils/logger';
 import nuclearAuditLogger from '../middlewares/auditLogger';
 
