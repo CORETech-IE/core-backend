@@ -1,276 +1,59 @@
 // src/app.ts
-/**
- * 🚨 CORE-BACKEND: Nuclear Log Ingestion Service
- * 
- * Single Responsibility: Log ingestion endpoint ONLY
- * Compliance: Zero Trust + ISO 27001 + GDPR by design
- * Architecture: Auditor-proof, drunk monkey deployable
- * 
- * Classification: CONFIDENTIAL (ISO 27001 A.8.2.1)
- * Retention: 7 years (compliance requirement)
- * Review Date: Every 6 months
- */
-
+// src/app.ts
 import express from 'express';
 import { Server } from 'http';
-import dotenv from 'dotenv';
-
-// Load environment variables first
-dotenv.config();
-
-// Core imports
-import { validateConfig } from './config/config-validator';
-import { validateCompliance } from './config/compliance-validator';
 import configureExpress from './config/express';
 import authRoutes from './routes/authRoutes';
 import logRoutes from './routes/logRoutes';
 import { errorHandler } from './middlewares/errorHandler';
-import { auditLoggerMiddleware } from './middlewares/auditLogger';
-import nuclearAuditLogger from './middlewares/auditLogger';
-import { gracefulShutdown } from './utils/gracefulShutdown';
-import { startRetentionService } from './services/retentionService';
 import logger from './utils/logger';
+import { getConfig } from './config/envConfig';
+import heartbeatRoutes from './routes/heartbeatRoutes';
 
-/**
- * Nuclear startup sequence
- * Each step is critical for compliance and security
- */
-async function startNuclearService(): Promise<Server> {
+async function startService(): Promise<void> {
   try {
-    // 🔍 STEP 1: Configuration validation (fail-fast)
-    logger.info('🔍 Step 1: Validating configuration...');
-    validateConfig();
+    // Cargar configuración
+    logger.info('🔄 Loading configuration...');
+    const config = await getConfig();
     
-    // 🛡️ STEP 2: Compliance validation (auditor-proof)
-    logger.info('🛡️ Step 2: Validating compliance requirements...');
-    await validateCompliance();
-    
-    // 🏗️ STEP 3: Initialize Express application
-    logger.info('🏗️ Step 3: Initializing Express application...');
+    // Crear app Express
     const app = express();
     
-    // 🔒 STEP 4: Configure security-first middleware
-    logger.info('🔒 Step 4: Configuring security middleware...');
+    // Configurar middleware
     configureExpress(app);
     
-    // 📊 STEP 5: Add audit logging (comprehensive trail)
-    logger.info('📊 Step 5: Enabling comprehensive audit logging...');
-    app.use(auditLoggerMiddleware);
-    
-    // 🛣️ STEP 6: Configure routes (minimal attack surface)
-    logger.info('🛣️ Step 6: Configuring routes...');
+    // Rutas: from more specific to less specifiv
+    app.use('/api/heartbeat', heartbeatRoutes);
     app.use('/auth', authRoutes);
     app.use('/api', logRoutes);
     
-    // 🚨 STEP 7: Error handling (security-first)
-    logger.info('🚨 Step 7: Configuring error handling...');
+    
+    // Error handler
     app.use(errorHandler);
     
-    // 🔧 STEP 8: Start retention service (GDPR compliance)
-    logger.info('🔧 Step 8: Starting GDPR retention service...');
-    startRetentionService();
+    // Arrancar servidor
+    const PORT = config.backendPort;
+    const HOST = config.backendHost;
     
-    // 🚀 STEP 9: Start server with validation
-    const PORT = validatePort(process.env.BACKEND_PORT);
-    const HOST = process.env.BACKEND_HOST || '0.0.0.0';
-    
-    logger.info('🚀 Step 9: Starting HTTP server...');
-    const server = app.listen(PORT, HOST, () => {
-      logger.info(`✅ CORE-BACKEND Nuclear Service Online`, {
+    app.listen(PORT, HOST, () => {
+      logger.info(`✅ CORE-BACKEND Service Online`, {
         port: PORT,
         host: HOST,
-        environment: process.env.NODE_ENV || 'development',
-        pid: process.pid,
-        startup_time: new Date().toISOString(),
-        classification: 'CONFIDENTIAL',
-        compliance_status: 'ACTIVE'
+        environment: config.nodeEnv,
+        service: config.serviceName
       });
-      
-      // Log successful startup for audit trail
-      nuclearAuditLogger.logEvent(
-        'SERVICE_STARTED' as any,
-        'Nuclear service startup completed successfully',
-        'SUCCESS',
-        {
-          resource_type: 'core_backend_service',
-          resource_id: 'core-backend',
-          metadata: {
-            service: 'core-backend',
-            version: require('../package.json').version,
-            pid: process.pid,
-            compliance_validated: true,
-            security_enabled: true,
-            startup_time: new Date().toISOString()
-          }
-        }
-      );
     });
-    
-    // 🛑 STEP 10: Configure graceful shutdown
-    logger.info('🛑 Step 10: Configuring graceful shutdown...');
-    configureGracefulShutdown(server);
-    
-    return server;
     
   } catch (error) {
-    logger.error('💥 CRITICAL: Nuclear service startup failed', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      classification: 'CRITICAL',
-      incident_type: 'STARTUP_FAILURE'
+    logger.error('💥 Service startup failed', {
+      error: error instanceof Error ? error.message : String(error)
     });
-    
-    // Log critical failure for audit
-    nuclearAuditLogger.logEvent(
-      'SERVICE_STARTUP_FAILED' as any,
-      'Nuclear service startup failed',
-      'FAILURE',
-      {
-        resource_type: 'core_backend_service',
-        resource_id: 'core-backend',
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-          compliance_impact: 'SERVICE_UNAVAILABLE'
-        }
-      }
-    );
-    
     process.exit(1);
   }
 }
 
-/**
- * Validate and normalize port number
- * Ensures port is valid for security and compliance
- */
-function validatePort(port: string | undefined): number {
-  if (!port) {
-    throw new Error('BACKEND_PORT environment variable is required');
-  }
-  
-  const portNumber = parseInt(port, 10);
-  
-  if (isNaN(portNumber) || portNumber <= 0 || portNumber > 65535) {
-    throw new Error(`Invalid port number: ${port}`);
-  }
-  
-  if (portNumber < 1024 && process.getuid && process.getuid() !== 0) {
-    throw new Error(`Port ${portNumber} requires root privileges`);
-  }
-  
-  return portNumber;
-}
-
-/**
- * Configure graceful shutdown handlers
- * Ensures clean shutdown with audit trail
- */
-function configureGracefulShutdown(server: Server): void {
-  const shutdown = gracefulShutdown(server, {
-    timeout: 30000, // 30 seconds timeout
-    onShutdown: async () => {
-      logger.info('🔄 Graceful shutdown initiated...');
-      
-      // Log shutdown for audit trail
-      nuclearAuditLogger.logEvent(
-        'SERVICE_SHUTDOWN' as any,
-        'Graceful service shutdown initiated',
-        'SUCCESS',
-        {
-          resource_type: 'core_backend_service',
-          resource_id: 'core-backend',
-          metadata: {
-            service: 'core-backend',
-            pid: process.pid,
-            shutdown_time: new Date().toISOString(),
-            reason: 'GRACEFUL_SHUTDOWN'
-          }
-        }
-      );
-    }
-  });
-  
-  // Handle different shutdown signals
-  process.on('SIGTERM', () => {
-    logger.info('📡 SIGTERM received, starting graceful shutdown...');
-    shutdown('SIGTERM');
-  });
-  
-  process.on('SIGINT', () => {
-    logger.info('📡 SIGINT received, starting graceful shutdown...');
-    shutdown('SIGINT');
-  });
-  
-  process.on('SIGUSR2', () => {
-    logger.info('📡 SIGUSR2 received (nodemon restart), starting graceful shutdown...');
-    shutdown('SIGUSR2');
-  });
-  
-  // Handle uncaught exceptions and rejections
-  process.on('uncaughtException', (error) => {
-    logger.error('💥 CRITICAL: Uncaught exception', {
-      error: error.message,
-      stack: error.stack,
-      classification: 'CRITICAL',
-      incident_type: 'UNCAUGHT_EXCEPTION'
-    });
-    
-    nuclearAuditLogger.logEvent(
-      'UNCAUGHT_EXCEPTION' as any,
-      'Critical uncaught exception occurred',
-      'FAILURE',
-      {
-        resource_type: 'core_backend_service',
-        resource_id: 'core-backend',
-        metadata: {
-          error: error.message,
-          stack: error.stack,
-          pid: process.pid,
-          compliance_impact: 'CRITICAL'
-        }
-      }
-    );
-    
-    shutdown('UNCAUGHT_EXCEPTION');
-  });
-  
-  process.on('unhandledRejection', (reason, promise) => {
-    logger.error('💥 CRITICAL: Unhandled promise rejection', {
-      reason: String(reason),
-      promise: String(promise),
-      classification: 'CRITICAL',
-      incident_type: 'UNHANDLED_REJECTION'
-    });
-    
-    nuclearAuditLogger.logEvent(
-      'UNHANDLED_REJECTION' as any,
-      'Critical unhandled promise rejection occurred',
-      'FAILURE',
-      {
-        resource_type: 'core_backend_service',
-        resource_id: 'core-backend',
-        metadata: {
-          reason: String(reason),
-          pid: process.pid,
-          compliance_impact: 'CRITICAL'
-        }
-      }
-    );
-    
-    shutdown('UNHANDLED_REJECTION');
-  });
-}
-
-// 🚀 Start the nuclear service
-if (require.main === module) {
-  startNuclearService().catch((error) => {
-    console.error('💥 Failed to start nuclear service:', error);
-    process.exit(1);
-  });
-}
-
-export default startNuclearService;
+// Arrancar
+startService();
 // src/config/compliance-validator.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Compliance Validator
@@ -1610,355 +1393,113 @@ export default {
 };
 
 // src/config/envConfig.ts
-// src/config/envConfig.ts - VERSIÓN SIMPLIFICADA CON SOPS
-import { spawn } from "child_process";
+// src/config/envConfig.ts
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
-import logger from "../utils/logger";
 
-/**
- * 🚨 CORE-BACKEND: Nuclear Environment Configuration with SOPS
- *
- * Direct SOPS decryption without .env files
- * Classification: CONFIDENTIAL (contains sensitive configuration)
- * Retention: Service lifetime (operational requirement)
- * Review Date: Every 3 months (critical configuration)
- */
-
-/**
- * Environment configuration interface
- */
 interface EnvironmentConfig {
-  // 🔐 Database Configuration (CRITICAL)
+  // Database
   pgHost: string;
   pgPort: number;
   pgDatabase: string;
   pgUser: string;
   pgPassword: string;
   pgMinConnections: number;
+  pgMaxConnections: number;
   pgIdleTimeoutMillis: number;
   pgConnectionTimeoutMillis: number;
-  pgMaxConnections: number;
 
-  // 🔑 Authentication Configuration (CRITICAL)
+  // Auth
   jwtSecret: string;
 
-  // 🏢 Service Configuration (HIGH)
+  // Service
   tenantId: string;
   serviceName: string;
   clientId: string;
 
-  // 🌐 Network Configuration (INTERNAL)
+  // Network
   backendPort: number;
   backendHost: string;
 
-  // 🌍 Environment Configuration (INTERNAL)
+  // Environment
   nodeEnv: "development" | "test" | "production";
   logLevel: "debug" | "info" | "warn" | "error";
-
-  // 🔒 User Credentials for Auth (CRITICAL)
-  coreServicesUsername: string;
-  coreServicesPasswordHash: string;
-  adminUsername: string;
-  adminPasswordHash: string;
-
-  // 📊 Integration Configuration
-  healthCheckInterval: number;
-
-  // Metadata
-  configSource: string;
 }
 
-/**
- * Get client ID from CLI args or environment
- */
-const getClientId = (): string => {
-  const cliArgs = process.argv.slice(2);
-  const cliClientId = cliArgs.find((arg) => !arg.startsWith("--"));
-
-  if (cliClientId) {
-    logger.info(`Using CLIENT_ID from CLI: ${cliClientId}`);
-    return cliClientId;
-  }
-
-  if (process.env.CLIENT_ID) {
-    logger.info(`Using CLIENT_ID from ENV: ${process.env.CLIENT_ID}`);
-    return process.env.CLIENT_ID;
-  }
-
-  logger.info(`Using default CLIENT_ID: core-dev`);
-  return "core-dev";
-};
-
-/**
- * Get GPG passphrase from environment or CLI argument
- */
-const getGPGPassphrase = (): string => {
-  if (process.env.GPG_PASSPHRASE) {
-    logger.info("Using GPG passphrase from environment");
-    return process.env.GPG_PASSPHRASE;
-  }
-
-  const passphraseArg = process.argv.find((arg) =>
-    arg.startsWith("--gpg-passphrase=")
-  );
-  if (passphraseArg) {
-    logger.info("Using GPG passphrase from CLI argument");
-    return passphraseArg.split("=")[1];
-  }
-
-  throw new Error(
-    "GPG passphrase not found. Set GPG_PASSPHRASE env var or use --gpg-passphrase=xxx"
-  );
-};
-
-/**
- * Get SOPS binary path
- */
-const getSopsPath = (envsRepoPath: string): string => {
-  // Windows path
-  if (process.platform === "win32") {
-    const winPath = path.join(envsRepoPath, "tools/win64/sops.exe");
-    if (fs.existsSync(winPath)) return winPath;
-  }
-
-  // Linux/Mac - assume sops is in PATH
-  return "sops";
-};
-
-/**
- * Decrypt SOPS file using spawn
- */
-const decryptSopsAsync = async (
-  sopsPath: string,
-  secretsPath: string,
-  gpgPassphrase: string
-): Promise<string> => {
-  logger.info("🔓 Decrypting SOPS file...");
-
-  return new Promise((resolve, reject) => {
-    const gnupgHome =
-      process.env.GNUPGHOME ||
-      (process.platform === "win32"
-        ? path.join(process.env.APPDATA!, "gnupg")
-        : path.join(process.env.HOME!, ".gnupg"));
-
-    const sopsProcess = spawn(
-      sopsPath,
-      ["-d", "--output-type", "json", secretsPath],
-      {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: {
-          ...process.env,
-          GNUPGHOME: gnupgHome,
-          GPG_PASSPHRASE: gpgPassphrase,
-          GPG_TTY: process.platform === "win32" ? undefined : "/dev/null",
-          GPG_BATCH: "1",
-        },
-        shell: true,
-        windowsHide: true,
-      }
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    sopsProcess.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    sopsProcess.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    sopsProcess.on("close", (code) => {
-      if (code === 0) {
-        logger.info("✅ SOPS decryption successful");
-        resolve(stdout);
-      } else {
-        logger.error("💥 SOPS decryption failed", {
-          exit_code: code,
-          stderr: stderr,
-        });
-        reject(new Error(`SOPS decryption failed: ${stderr}`));
-      }
-    });
-
-    sopsProcess.on("error", (error) => {
-      logger.error("💥 SOPS process error", {
-        error: error.message,
-      });
-      reject(error);
-    });
-  });
-};
-
-/**
- * Load configuration using SOPS
- */
-const loadConfig = async (): Promise<EnvironmentConfig> => {
-  logger.info("🔧 Loading config via SOPS");
-
-  const clientId = getClientId();
-  const gpgPassphrase = getGPGPassphrase();
-
-  const envsRepoPath = path.resolve(__dirname, "../../../core-envs-private");
-
-  if (!fs.existsSync(envsRepoPath)) {
-    throw new Error(`core-envs-private repo not found at: ${envsRepoPath}`);
-  }
-
-  logger.info(`📁 Using repo: ${envsRepoPath}`);
-
-  try {
-    // 1. Load config.yaml (public configuration)
-    const yamlPath = path.join(envsRepoPath, `clients/${clientId}/config.yaml`);
-    if (!fs.existsSync(yamlPath)) {
-      throw new Error(`Client config.yaml not found: ${clientId}`);
-    }
-
-    const yamlFile = fs.readFileSync(yamlPath, "utf8");
-    const yamlParsed = yaml.load(yamlFile) as Record<string, any>;
-
-    logger.info("✅ config.yaml loaded");
-
-    // 2. Decrypt secrets.sops.yaml
-    const secretsPath = path.join(
-      envsRepoPath,
-      `clients/${clientId}/secrets.sops.yaml`
-    );
-    if (!fs.existsSync(secretsPath)) {
-      throw new Error(`Client secrets.sops.yaml not found: ${clientId}`);
-    }
-
-    const sopsPath = getSopsPath(envsRepoPath);
-    const decryptOutput = await decryptSopsAsync(
-      sopsPath,
-      secretsPath,
-      gpgPassphrase
-    );
-    const secretsConfig = JSON.parse(decryptOutput);
-
-    logger.info("✅ Secrets decrypted successfully");
-
-    // 3. Map to EnvironmentConfig
-    const config: EnvironmentConfig = {
-      // Database Configuration - TODO COMPLETO
-      pgHost: yamlParsed.pg_host || "localhost",
-      pgPort: parseInt(yamlParsed.pg_port || "5432"),
-      pgDatabase: yamlParsed.pg_database || "core_backend_db",
-      pgUser: secretsConfig.pg_user || yamlParsed.pg_user,
-      pgPassword: secretsConfig.pg_password,
-
-      // Connection pool
-      pgMinConnections: parseInt(yamlParsed.pg_min_connections || "2"),
-      pgMaxConnections: parseInt(yamlParsed.pg_max_connections || "20"),
-      pgIdleTimeoutMillis: parseInt(
-        yamlParsed.pg_idle_timeout_millis || "30000"
-      ),
-      pgConnectionTimeoutMillis: parseInt(
-        yamlParsed.pg_connection_timeout_millis || "5000"
-      ),
-      // Authentication Configuration
-      jwtSecret: secretsConfig.jwt_secret || secretsConfig.internal_jwt_secret,
-
-      // Service Configuration
-      tenantId: secretsConfig.tenant_id || yamlParsed.tenant_id || clientId,
-      serviceName: yamlParsed.service_name || "core-backend",
-      clientId: clientId,
-
-      // Network Configuration
-      backendPort: parseInt(yamlParsed.backend_port || "3000"),
-      backendHost: yamlParsed.backend_host || "0.0.0.0",
-
-      // Environment Configuration
-      nodeEnv: (yamlParsed.node_env || "development") as any,
-      logLevel: (yamlParsed.log_level || "info") as any,
-
-      // User Credentials
-      coreServicesUsername:
-        secretsConfig.core_services_username || "core-services",
-      coreServicesPasswordHash: secretsConfig.core_services_password_hash,
-      adminUsername: secretsConfig.admin_username || "admin",
-      adminPasswordHash: secretsConfig.admin_password_hash,
-
-      // Integration Configuration
-      healthCheckInterval: parseInt(
-        yamlParsed.health_check_interval || "60000"
-      ),
-
-      // Metadata
-      configSource: "SOPS_ONLY",
-    };
-
-    // Validate critical fields
-    if (!config.pgPassword)
-      throw new Error("Database password not found in secrets");
-    if (!config.jwtSecret) throw new Error("JWT secret not found in secrets");
-    if (!config.coreServicesPasswordHash && !config.adminPasswordHash) {
-      throw new Error("At least one user credential must be configured");
-    }
-
-    logger.info("✅ Config loaded successfully via SOPS", {
-      clientId: config.clientId,
-      serviceName: config.serviceName,
-      configSource: config.configSource,
-    });
-
-    return config;
-  } catch (error) {
-    logger.error("💥 Config loading failed:", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      classification: "CRITICAL",
-      incident_type: "CONFIG_LOAD_FAILURE",
-    });
-    throw error;
-  }
-};
-
-// Create singleton config
 let cachedConfig: EnvironmentConfig | null = null;
 
-/**
- * Get configuration (cached after first load)
- */
+const loadConfig = (): EnvironmentConfig => {
+  if (cachedConfig) return cachedConfig;
+
+  const clientId = process.argv[2] || process.env.CLIENT_ID || "core-dev";
+  const gpgPassphrase = process.env.GPG_PASSPHRASE || 
+    process.argv.find(arg => arg.startsWith("--gpg-passphrase="))?.split("=")[1];
+
+  if (!gpgPassphrase) {
+    throw new Error("GPG passphrase required");
+  }
+
+  const envsRepoPath = path.resolve(__dirname, "../../../core-envs-private");
+  
+  // Load config.yaml
+  const yamlPath = path.join(envsRepoPath, `clients/${clientId}/config.yaml`);
+  const yamlConfig = yaml.load(fs.readFileSync(yamlPath, "utf8")) as any;
+  
+  // Decrypt secrets
+  const secretsPath = path.join(envsRepoPath, `clients/${clientId}/secrets.sops.yaml`);
+  const sopsCmd = process.platform === "win32" 
+    ? path.join(envsRepoPath, "tools/win64/sops.exe")
+    : "sops";
+    
+  process.env.GPG_PASSPHRASE = gpgPassphrase;
+  const decrypted = execSync(`${sopsCmd} -d --output-type json ${secretsPath}`, {
+    encoding: 'utf8'
+  });
+  const secrets = JSON.parse(decrypted);
+
+  cachedConfig = {
+    // Database
+    pgHost: yamlConfig.pg_host || "localhost",
+    pgPort: parseInt(yamlConfig.pg_port || "5432"),
+    pgDatabase: yamlConfig.pg_database || "core_backend_db",
+    pgUser: secrets.pg_user || yamlConfig.pg_user,
+    pgPassword: secrets.pg_password,
+    pgMinConnections: yamlConfig.pg_min_connections || 2,
+    pgMaxConnections : yamlConfig.pg_max_connections || 10,
+    pgIdleTimeoutMillis : yamlConfig.pg_idle_timeout_millis || 30000,
+    pgConnectionTimeoutMillis : yamlConfig.pg_connection_timeout_millis || 2000,
+
+    // Auth
+    jwtSecret: secrets.jwt_secret || secrets.internal_jwt_secret,
+
+    // Service
+    tenantId: secrets.tenant_id || yamlConfig.tenant_id || clientId,
+    serviceName: yamlConfig.service_name || "core-backend",
+    clientId: clientId,
+
+    // Network
+    backendPort: parseInt(yamlConfig.backend_port || "3000"),
+    backendHost: yamlConfig.backend_host || "0.0.0.0",
+
+    // Environment
+    nodeEnv: (yamlConfig.node_env || "development") as any,
+    logLevel: (yamlConfig.log_level || "info") as any
+  };
+
+  return cachedConfig;
+};
+
 export const getConfig = async (): Promise<EnvironmentConfig> => {
-  if (!cachedConfig) {
-    cachedConfig = await loadConfig();
-  }
-  return cachedConfig;
+  return loadConfig();
 };
 
-/**
- * Synchronous config getter (throws if not loaded)
- */
 export const getConfigSync = (): EnvironmentConfig => {
-  if (!cachedConfig) {
-    throw new Error("Configuration not loaded. Call getConfig() first");
-  }
-  return cachedConfig;
+  return loadConfig();
 };
 
-// Initialize config on module load
-(async () => {
-  try {
-    await getConfig();
-  } catch (error) {
-    logger.error("💥 Failed to initialize configuration:", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      classification: "CRITICAL",
-      incident_type: "CONFIG_INIT_FAILURE",
-    });
-    process.exit(1);
-  }
-})();
-
-// Export default for backward compatibility
 export default getConfigSync();
-
 // src/config/express.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Express Configuration
@@ -2367,14 +1908,9 @@ function generateCorrelationId(): string {
 export default configureExpress;
 // src/controllers/authController.ts
 /**
- * 🚨 CORE-BACKEND: Nuclear Authentication Controller
+ * 🚨 CORE-BACKEND: Authentication Controller (SIMPLIFIED)
  * 
- * Simple but secure JWT authentication for multi-client access
- * Compatible with Oracle PL/SQL, JavaScript, Python clients
- * 
- * Classification: CONFIDENTIAL (authentication logic)
- * Retention: 7 years (security requirement)
- * Review Date: Every 3 months (critical security component)
+ * JWT authentication for multi-client access
  */
 
 import { Request, Response } from 'express';
@@ -2382,11 +1918,9 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import envConfig from '../config/envConfig';
 import logger from '../utils/logger';
-import { getConfigSync } from '../config/envConfig';
-import rawUsers from '../config/users.json';
 
 /**
- * User record interface with security context
+ * User record interface
  */
 interface UserRecord {
   readonly username: string;
@@ -2394,16 +1928,8 @@ interface UserRecord {
   readonly role: string;
   readonly enabled: boolean;
   readonly created_at: string;
-  readonly last_login?: string;
   readonly failed_attempts: number;
-  readonly locked_until?: string;
 }
-
-interface UserJsonRecord {
-  password: string;  // en el JSON se llama "password", no "password_hash"
-  role: string;
-}
-
 
 /**
  * JWT payload interface
@@ -2417,252 +1943,99 @@ interface JWTPayload {
 }
 
 /**
- * Authentication response interface
+ * Get users - TEMPORAL hardcoded
+ * TODO: Migrar a SOPS cuando esté estable
  */
-interface AuthResponse {
-  token: string;
-  expires_in: number;
-  token_type: 'Bearer';
-  issued_at: string;
-  user: {
-    username: string;
-    role: string;
-    tenant_id: string;
+function getUsers(): Record<string, UserRecord> {
+  return {
+    "admin": {
+      username: "admin",
+      password_hash: "$2b$12$n9mBEWXteAgZCOayuN7C3OcWbajiLhwUT1kLosnDakiNlKiWdV7c.",
+      role: "admin",
+      enabled: true,
+      created_at: new Date().toISOString(),
+      failed_attempts: 0
+    },
+    "core-services": {
+      username: "core-services", 
+      password_hash: "$2b$12$iSjq0bMgi/3lgMZVh85ie.2OKXMFAM1kuZHu31mP8yMaPjF.lJkWi",
+      role: "service",
+      enabled: true,
+      created_at: new Date().toISOString(),
+      failed_attempts: 0
+    }
   };
 }
 
 /**
- * Load users from JSON file
- * TODO: TEMPORAL - Migrar a SOPS cuando esté listo
- */
-function loadUsersFromJson(): Record<string, UserRecord> {
-  const jsonUsers = rawUsers as Record<string, UserJsonRecord>;
-  const users: Record<string, UserRecord> = {};
-  
-  // Convertir formato JSON al formato esperado
-  Object.entries(jsonUsers).forEach(([username, userData]) => {
-    users[username] = {
-      username,
-      password_hash: userData.password, // en el JSON se llama "password"
-      role: userData.role,
-      enabled: true,
-      created_at: new Date().toISOString(),
-      failed_attempts: 0
-    };
-  });
-  
-  logger.info('✅ Users loaded from JSON', {
-    classification: 'HIGH',
-    audit_event: 'USERS_LOADED',
-    user_count: Object.keys(users).length,
-    usernames: Object.keys(users) // Safe to log usernames
-  });
-  
-  return users;
-}
-
-
-
-/**
- * Load users from core-envs-private configuration
- * This will be replaced with actual core-envs-private integration
- * For now, uses environment variables with secure defaults
- */
-function loadUsersFromCoreEnvs(): Record<string, UserRecord> {
-  const config = getConfigSync(); // Usar el config de SOPS
-  const users: Record<string, UserRecord> = {};
-  
-  // Core services user
-  if (config.coreServicesPasswordHash) {
-    users[config.coreServicesUsername] = {
-      username: config.coreServicesUsername,
-      password_hash: config.coreServicesPasswordHash,
-      role: 'service',
-      enabled: true,
-      created_at: new Date().toISOString(),
-      failed_attempts: 0
-    };
-  }
-  
-  // Admin user
-  if (config.adminPasswordHash) {
-    users[config.adminUsername] = {
-      username: config.adminUsername,
-      password_hash: config.adminPasswordHash,
-      role: 'admin',
-      enabled: true,
-      created_at: new Date().toISOString(),
-      failed_attempts: 0
-    };
-  }
-  
-  return users;
-}
-
-/**
- * Get users with caching and error handling
- * Implements circuit breaker pattern for resilience
- */
-let cachedUsers: Record<string, UserRecord> | null = null;
-let lastUserLoad = 0;
-const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function getUsers(): Record<string, UserRecord> {
-  const now = Date.now();
-  
-  // Use cached users if still valid
-  if (cachedUsers && (now - lastUserLoad) < USER_CACHE_TTL) {
-    return cachedUsers;
-  }
-  
-  try {
-    // TEMPORAL - Usar JSON en lugar de SOPS
-    cachedUsers = loadUsersFromJson();
-    lastUserLoad = now;
-    return cachedUsers;
-  } catch (error) {
-    logger.error('💥 Failed to load users', {
-      classification: 'CRITICAL',
-      audit_event: 'USER_LOAD_FAILED',
-      error: error instanceof Error ? error.message : String(error)
-    });
-    
-    // If we have cached users, use them as fallback
-    if (cachedUsers) {
-      logger.warn('⚠️ Using cached users as fallback', {
-        classification: 'HIGH',
-        audit_event: 'USER_CACHE_FALLBACK'
-      });
-      return cachedUsers;
-    }
-    
-    throw error;
-  }
-}
-
-/**
- * Validate user credentials with security controls
+ * Validate user credentials
  */
 async function validateCredentials(
   username: string, 
-  password: string,
-  clientIp: string,
-  correlationId: string
+  password: string
 ): Promise<{ valid: boolean; user?: UserRecord; reason?: string }> {
   
   const users = getUsers();
   const user = users[username];
   
-  // User not found
   if (!user) {
-    logger.warn('🚫 Authentication failed - user not found', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_USER_NOT_FOUND',
-      username,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
+    logger.warn('Authentication failed - user not found', { username });
     return { valid: false, reason: 'Invalid credentials' };
   }
   
-  // User disabled
   if (!user.enabled) {
-    logger.warn('🚫 Authentication failed - user disabled', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_USER_DISABLED',
-      username,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
+    logger.warn('Authentication failed - user disabled', { username });
     return { valid: false, reason: 'Account disabled' };
   }
+
+  // 🔍 DEBUG TEMPORAL - BORRAR DESPUÉS
+  console.log('🔐 Debug auth:', {
+    username,
+    password_received: password,
+    stored_hash: user.password_hash,
+    hash_starts_with: user.password_hash.substring(0, 7)
+  });
   
-  // Account locked
-  if (user.locked_until && new Date(user.locked_until) > new Date()) {
-    logger.warn('🚫 Authentication failed - account locked', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_USER_LOCKED',
-      username,
-      locked_until: user.locked_until,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
-    return { valid: false, reason: 'Account temporarily locked' };
-  }
-  
-  // Validate password
   try {
     const passwordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!passwordValid) {
-      logger.warn('🚫 Authentication failed - invalid password', {
-        classification: 'HIGH',
-        audit_event: 'AUTH_INVALID_PASSWORD',
-        username,
-        failed_attempts: user.failed_attempts + 1,
-        client_ip: clientIp,
-        correlation_id: correlationId
-      });
-      
+      logger.warn('Authentication failed - invalid password', { username });
       return { valid: false, reason: 'Invalid credentials' };
     }
     
-    logger.info('✅ Authentication successful', {
-      classification: 'HIGH',
-      audit_event: 'AUTH_SUCCESS',
-      username,
-      role: user.role,
-      client_ip: clientIp,
-      correlation_id: correlationId
-    });
-    
+    logger.info('Authentication successful', { username, role: user.role });
     return { valid: true, user };
     
   } catch (error) {
-    logger.error('💥 Password validation error', {
-      classification: 'CRITICAL',
-      audit_event: 'AUTH_VALIDATION_ERROR',
+    logger.error('Password validation error', {
       username,
-      error: error instanceof Error ? error.message : String(error),
-      client_ip: clientIp,
-      correlation_id: correlationId
+      error: error instanceof Error ? error.message : String(error)
     });
-    
     return { valid: false, reason: 'Authentication error' };
   }
 }
 
 /**
- * Generate secure JWT token
+ * Generate JWT token
  */
-function generateJWT(user: UserRecord, correlationId: string): { token: string; expiresIn: number } {
+function generateJWT(user: UserRecord): { token: string; expiresIn: number } {
   const now = Math.floor(Date.now() / 1000);
-  const expiresIn = 15 * 60; // 15 minutes for security
+  const expiresIn = 15 * 60; // 15 minutes
   
-  const payload: JWTPayload = {
+  const payload = {
+    sub: user.username,  // ← AÑADE ESTO
     username: user.username,
-    role: user.role,
-    tenant_id: envConfig.tenantId,
+    tenant_name: envConfig.tenantId,  // ← Cambiar de tenant_id a tenant_name
+    roles: [user.role],  // ← Array en vez de string
+    permissions: user.role === 'admin' ? ['read', 'write', 'delete'] : ['read', 'write'],
+    session_id: `session-${Date.now()}`,
     iat: now,
     exp: now + expiresIn
   };
   
   const token = jwt.sign(payload, envConfig.jwtSecret, {
-    algorithm: 'HS256',
-    issuer: 'core-backend',
-    audience: 'core-platform'
-  });
-  
-  logger.info('🔑 JWT token generated', {
-    classification: 'HIGH',
-    audit_event: 'JWT_GENERATED',
-    username: user.username,
-    role: user.role,
-    expires_in: expiresIn,
-    correlation_id: correlationId
+    algorithm: 'HS256'
   });
   
   return { token, expiresIn };
@@ -2670,68 +2043,30 @@ function generateJWT(user: UserRecord, correlationId: string): { token: string; 
 
 /**
  * Login endpoint
- * Authenticates user and returns JWT token
  */
 export const login = async (req: Request, res: Response): Promise<void> => {
-  const startTime = Date.now();
-  const correlationId = (req as any).correlationId || 'unknown';
-  const clientIp = req.ip || 'unknown';
-  
   try {
-    // Input validation
     const { username, password } = req.body;
     
     if (!username || !password) {
-      logger.warn('🚫 Login failed - missing credentials', {
-        classification: 'HIGH',
-        audit_event: 'LOGIN_MISSING_CREDENTIALS',
-        has_username: !!username,
-        has_password: !!password,
-        client_ip: clientIp,
-        correlation_id: correlationId
-      });
-      
       res.status(400).json({
-        error: 'Username and password are required',
-        correlation_id: correlationId
+        error: 'Username and password are required'
       });
       return;
     }
     
-    // Validate input format
-    if (typeof username !== 'string' || typeof password !== 'string') {
-      logger.warn('🚫 Login failed - invalid input format', {
-        classification: 'HIGH',
-        audit_event: 'LOGIN_INVALID_FORMAT',
-        username_type: typeof username,
-        password_type: typeof password,
-        client_ip: clientIp,
-        correlation_id: correlationId
-      });
-      
-      res.status(400).json({
-        error: 'Invalid input format',
-        correlation_id: correlationId
-      });
-      return;
-    }
-    
-    // Validate credentials
-    const validation = await validateCredentials(username, password, clientIp, correlationId);
+    const validation = await validateCredentials(username, password);
     
     if (!validation.valid || !validation.user) {
       res.status(401).json({
-        error: validation.reason || 'Authentication failed',
-        correlation_id: correlationId
+        error: validation.reason || 'Authentication failed'
       });
       return;
     }
     
-    // Generate JWT
-    const { token, expiresIn } = generateJWT(validation.user, correlationId);
+    const { token, expiresIn } = generateJWT(validation.user);
     
-    // Prepare response
-    const response: AuthResponse = {
+    res.status(200).json({
       token,
       expires_in: expiresIn,
       token_type: 'Bearer',
@@ -2741,196 +2076,386 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         role: validation.user.role,
         tenant_id: envConfig.tenantId
       }
-    };
-    
-    const duration = Date.now() - startTime;
-    
-    logger.info('✅ Login successful', {
-      classification: 'HIGH',
-      audit_event: 'LOGIN_SUCCESS',
-      username: validation.user.username,
-      role: validation.user.role,
-      duration_ms: duration,
-      client_ip: clientIp,
-      correlation_id: correlationId
     });
     
-    res.status(200).json(response);
-    
   } catch (error) {
-    const duration = Date.now() - startTime;
-    
-    logger.error('💥 Login error', {
-      classification: 'CRITICAL',
-      audit_event: 'LOGIN_ERROR',
-      error: error instanceof Error ? error.message : String(error),
-      duration_ms: duration,
-      client_ip: clientIp,
-      correlation_id: correlationId
+    logger.error('Login error', {
+      error: error instanceof Error ? error.message : String(error)
     });
     
     res.status(500).json({
-      error: 'Internal authentication error',
-      correlation_id: correlationId
+      error: 'Internal authentication error'
     });
   }
 };
 
 /**
- * Token validation endpoint
- * Validates JWT token and returns user info
+ * Validate token endpoint
  */
 export const validateToken = async (req: Request, res: Response): Promise<void> => {
-  const correlationId = (req as any).correlationId || 'unknown';
-  
   try {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({
-        error: 'Missing or invalid authorization header',
-        correlation_id: correlationId
+        error: 'Missing or invalid authorization header'
       });
       return;
     }
     
     const token = authHeader.split(' ')[1];
+    const payload = jwt.verify(token, envConfig.jwtSecret) as JWTPayload;
     
-    try {
-      const payload = jwt.verify(token, envConfig.jwtSecret) as JWTPayload;
-      
-      logger.info('✅ Token validation successful', {
-        classification: 'INTERNAL',
-        audit_event: 'TOKEN_VALIDATED',
+    res.status(200).json({
+      valid: true,
+      user: {
         username: payload.username,
         role: payload.role,
-        correlation_id: correlationId
-      });
-      
-      res.status(200).json({
-        valid: true,
-        user: {
-          username: payload.username,
-          role: payload.role,
-          tenant_id: payload.tenant_id
-        },
-        expires_at: new Date(payload.exp * 1000).toISOString(),
-        correlation_id: correlationId
-      });
-      
-    } catch (jwtError) {
-      logger.warn('🚫 Token validation failed', {
-        classification: 'HIGH',
-        audit_event: 'TOKEN_VALIDATION_FAILED',
-        error: jwtError instanceof Error ? jwtError.message : String(jwtError),
-        correlation_id: correlationId
-      });
-      
-      res.status(401).json({
-        error: 'Invalid or expired token',
-        correlation_id: correlationId
-      });
-    }
+        tenant_id: payload.tenant_id
+      },
+      expires_at: new Date(payload.exp * 1000).toISOString()
+    });
     
   } catch (error) {
-    logger.error('💥 Token validation error', {
-      classification: 'CRITICAL',
-      audit_event: 'TOKEN_VALIDATION_ERROR',
-      error: error instanceof Error ? error.message : String(error),
+    res.status(401).json({
+      error: 'Invalid or expired token'
+    });
+  }
+};
+
+/**
+ * Refresh token endpoint
+ */
+export const refreshToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({
+        error: 'Missing or invalid authorization header'
+      });
+      return;
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const payload = jwt.verify(token, envConfig.jwtSecret, { 
+      ignoreExpiration: true 
+    }) as JWTPayload;
+    
+    // Check if token is not too old
+    const now = Math.floor(Date.now() / 1000);
+    const tokenAge = now - payload.iat;
+    
+    if (tokenAge > 3600) { // 1 hour max
+      res.status(401).json({
+        error: 'Token too old for refresh'
+      });
+      return;
+    }
+    
+    // Verify user still exists and is valid
+    const users = getUsers();
+    const user = users[payload.username];
+    
+    if (!user || !user.enabled) {
+      res.status(401).json({
+        error: 'User no longer valid'
+      });
+      return;
+    }
+    
+    const { token: newToken, expiresIn } = generateJWT(user);
+    
+    res.status(200).json({
+      token: newToken,
+      expires_in: expiresIn,
+      token_type: 'Bearer',
+      issued_at: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.status(401).json({
+      error: 'Invalid token for refresh'
+    });
+  }
+};
+// src/controllers/heartbeat/receive.ts
+/**
+ * ?? CORE-BACKEND: Heartbeat Controller
+ * 
+ * Service health monitoring endpoint
+ * Tracks service status and health metrics
+ */
+
+import { Request, Response } from 'express';
+import { z } from 'zod';
+import db from '../../config/db';
+import logger from '../../utils/logger';
+import envConfig from '../../config/envConfig';
+
+/**
+ * Heartbeat payload validation schema
+ */
+const heartbeatSchema = z.object({
+  client_id: z.string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  
+  service: z.string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  
+  hostname: z.string()
+    .max(256)
+    .optional(),
+  
+  status: z.enum(['OK', 'STARTUP', 'WARNING', 'ERROR', 'SHUTDOWN'])
+    .default('OK'),
+  
+  // Health metrics
+  uptime_seconds: z.number()
+    .int()
+    .min(0)
+    .optional(),
+  
+  memory_usage_mb: z.number()
+    .int()
+    .min(0)
+    .optional(),
+  
+  cpu_usage_percent: z.number()
+    .min(0)
+    .max(100)
+    .optional(),
+  
+  active_connections: z.number()
+    .int()
+    .min(0)
+    .optional(),
+  
+  // Additional metadata
+  metadata: z.record(z.any())
+    .optional()
+    .default({})
+});
+
+/**
+ * Send heartbeat
+ * POST /api/heartbeat
+ */
+export const sendHeartbeat = async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const correlationId = (req as any).correlationId || 'unknown';
+  
+  try {
+    // Validate payload
+    const validationResult = heartbeatSchema.safeParse(req.body);
+    
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors;
+      
+      logger.warn('Heartbeat validation failed', {
+        error_count: errors.length,
+        errors: errors.map(e => ({ field: e.path.join('.'), message: e.message })),
+        correlation_id: correlationId
+      });
+      
+      res.status(400).json({
+        error: 'Invalid heartbeat payload',
+        details: errors.map(e => ({
+          field: e.path.join('.'),
+          message: e.message
+        })),
+        correlation_id: correlationId
+      });
+      return;
+    }
+    
+    const heartbeat = validationResult.data;
+    
+    // Calculate process uptime if not provided
+    if (!heartbeat.uptime_seconds) {
+      heartbeat.uptime_seconds = Math.floor(process.uptime());
+    }
+    
+    // Get memory usage if not provided
+    if (!heartbeat.memory_usage_mb) {
+      const memUsage = process.memoryUsage();
+      heartbeat.memory_usage_mb = Math.round(memUsage.heapUsed / 1024 / 1024);
+    }
+    
+    // Insert heartbeat
+    const insertQuery = `
+      INSERT INTO core_dev.heartbeats (
+        client_id, service, hostname, timestamp, status,
+        uptime_seconds, memory_usage_mb, cpu_usage_percent, 
+        active_connections, metadata, retention_until
+      ) VALUES (
+        $1, $2, $3, NOW(), $4, $5, $6, $7, $8, $9,
+        NOW() + INTERVAL '7 days'
+      )
+      RETURNING id, timestamp
+    `;
+    
+    const values = [
+      heartbeat.client_id,
+      heartbeat.service,
+      heartbeat.hostname || require('os').hostname(),
+      heartbeat.status,
+      heartbeat.uptime_seconds,
+      heartbeat.memory_usage_mb,
+      heartbeat.cpu_usage_percent || null,
+      heartbeat.active_connections || null,
+      JSON.stringify(heartbeat.metadata)
+    ];
+    
+    const result = await db.query(insertQuery, values, correlationId);
+    const inserted = result.rows[0];
+    
+    const duration = Date.now() - startTime;
+    
+    logger.info('?? Heartbeat recorded', {
+      heartbeat_id: inserted.id,
+      client_id: heartbeat.client_id,
+      service: heartbeat.service,
+      status: heartbeat.status,
+      duration_ms: duration,
       correlation_id: correlationId
     });
     
+    res.status(201).json({
+      status: 'success',
+      message: 'Heartbeat recorded',
+      heartbeat_id: inserted.id,
+      timestamp: inserted.timestamp,
+      correlation_id: correlationId,
+      processing_time_ms: duration
+    });
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    
+    logger.error('Heartbeat recording failed', {
+      error: error instanceof Error ? error.message : String(error),
+      correlation_id: correlationId,
+      duration_ms: duration
+    });
+    
     res.status(500).json({
-      error: 'Token validation error',
+      error: 'Failed to record heartbeat',
       correlation_id: correlationId
     });
   }
 };
 
 /**
- * Token refresh endpoint (optional)
- * Refreshes JWT token if still valid
+ * Get service status
+ * GET /api/heartbeat/:service
  */
-export const refreshToken = async (req: Request, res: Response): Promise<void> => {
+export const getServiceStatus = async (req: Request, res: Response): Promise<void> => {
+  const { service } = req.params;
   const correlationId = (req as any).correlationId || 'unknown';
   
   try {
-    const authHeader = req.headers.authorization;
+    const query = `
+      SELECT 
+        client_id,
+        service,
+        hostname,
+        timestamp,
+        status,
+        uptime_seconds,
+        memory_usage_mb,
+        cpu_usage_percent,
+        active_connections,
+        metadata
+      FROM core_dev.heartbeats
+      WHERE service = $1
+      ORDER BY timestamp DESC
+      LIMIT 10
+    `;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({
-        error: 'Missing or invalid authorization header',
-        correlation_id: correlationId
-      });
-      return;
-    }
+    const result = await db.query(query, [service], correlationId);
     
-    const token = authHeader.split(' ')[1];
+    // Get latest status
+    const latest = result.rows[0];
+    const isHealthy = latest && 
+      ['OK', 'STARTUP'].includes(latest.status) && 
+      (Date.now() - new Date(latest.timestamp).getTime()) < 300000; // 5 min
     
-    try {
-      // Verify current token (even if expired, we check the payload)
-      const payload = jwt.verify(token, envConfig.jwtSecret, { ignoreExpiration: true }) as JWTPayload;
-      
-      // Check if token is not too old (max 1 hour for refresh)
-      const now = Math.floor(Date.now() / 1000);
-      const tokenAge = now - payload.iat;
-      const maxRefreshAge = 60 * 60; // 1 hour
-      
-      if (tokenAge > maxRefreshAge) {
-        res.status(401).json({
-          error: 'Token too old for refresh',
-          correlation_id: correlationId
-        });
-        return;
-      }
-      
-      // Get user to ensure still valid
-      const users = getUsers();
-      const user = users[payload.username];
-      
-      if (!user || !user.enabled) {
-        res.status(401).json({
-          error: 'User no longer valid',
-          correlation_id: correlationId
-        });
-        return;
-      }
-      
-      // Generate new token
-      const { token: newToken, expiresIn } = generateJWT(user, correlationId);
-      
-      logger.info('🔄 Token refreshed', {
-        classification: 'HIGH',
-        audit_event: 'TOKEN_REFRESHED',
-        username: payload.username,
-        correlation_id: correlationId
-      });
-      
-      res.status(200).json({
-        token: newToken,
-        expires_in: expiresIn,
-        token_type: 'Bearer',
-        issued_at: new Date().toISOString(),
-        correlation_id: correlationId
-      });
-      
-    } catch (jwtError) {
-      res.status(401).json({
-        error: 'Invalid token for refresh',
-        correlation_id: correlationId
-      });
-    }
+    res.status(200).json({
+      service,
+      healthy: isHealthy,
+      latest_heartbeat: latest || null,
+      recent_heartbeats: result.rows,
+      correlation_id: correlationId
+    });
     
   } catch (error) {
-    logger.error('💥 Token refresh error', {
-      classification: 'CRITICAL',
-      audit_event: 'TOKEN_REFRESH_ERROR',
+    logger.error('Failed to get service status', {
+      error: error instanceof Error ? error.message : String(error),
+      service,
+      correlation_id: correlationId
+    });
+    
+    res.status(500).json({
+      error: 'Failed to get service status',
+      correlation_id: correlationId
+    });
+  }
+};
+
+/**
+ * Get all services status
+ * GET /api/heartbeat
+ */
+export const getAllServicesStatus = async (req: Request, res: Response): Promise<void> => {
+  const correlationId = (req as any).correlationId || 'unknown';
+  
+  try {
+    const query = `
+      WITH latest_heartbeats AS (
+        SELECT DISTINCT ON (service) 
+          client_id,
+          service,
+          hostname,
+          timestamp,
+          status,
+          uptime_seconds,
+          memory_usage_mb
+        FROM core_dev.heartbeats
+        WHERE timestamp > NOW() - INTERVAL '10 minutes'
+        ORDER BY service, timestamp DESC
+      )
+      SELECT * FROM latest_heartbeats
+      ORDER BY service
+    `;
+    
+    const result = await db.query(query, [], correlationId);
+    
+    const services = result.rows.map(row => ({
+      ...row,
+      healthy: ['OK', 'STARTUP'].includes(row.status)
+    }));
+    
+    res.status(200).json({
+      status: 'success',
+      total_services: services.length,
+      healthy_services: services.filter(s => s.healthy).length,
+      services,
+      correlation_id: correlationId
+    });
+    
+  } catch (error) {
+    logger.error('Failed to get all services status', {
       error: error instanceof Error ? error.message : String(error),
       correlation_id: correlationId
     });
     
     res.status(500).json({
-      error: 'Token refresh error',
+      error: 'Failed to get services status',
       correlation_id: correlationId
     });
   }
@@ -3518,7 +3043,7 @@ export const emitLog = async (req: Request, res: Response): Promise<void> => {
     
     // 🗄️ STEP 3: Database insertion with transaction
     const insertQuery = `
-      INSERT INTO logs (
+      INSERT INTO core_dev.logs (
         tenant_name, service, timestamp, level, message, 
         tags, context, trace_id, classification, 
         retention_until, created_at
@@ -5665,6 +5190,31 @@ router.use('*', (req: Request, res: Response) => {
 });
 
 export default router;
+// src/routes/heartbeatRoutes.ts
+/**
+ * ?? CORE-BACKEND: Heartbeat Routes
+ */
+
+import express from 'express';
+import { authenticateRequest } from '../middlewares/authentication';
+import { 
+  sendHeartbeat, 
+  getServiceStatus, 
+  getAllServicesStatus 
+} from '../controllers/heartbeat/receive';
+
+const router = express.Router();
+
+// Send heartbeat (requires auth)
+router.post('/', authenticateRequest, sendHeartbeat);
+
+// Get all services status (public)
+router.get('/', getAllServicesStatus);
+
+// Get specific service status (public)
+router.get('/:service', getServiceStatus);
+
+export default router;
 // src/routes/logRoutes.ts
 /**
  * 🚨 CORE-BACKEND: Nuclear Log Ingestion Routes
@@ -7504,11 +7054,11 @@ export default logger;
 // src/config/users.json
 {
     "admin": {
-      "password": "$2a$12$XovTOF4pkAY7RgW2VabJceEgNQPk.TjDmWxbwno5fWaL2wgHmBwjy", 
+      "password": "$2b$10$uG04ERbDRWD/3AuCRu79Lutrs0CeL9MgcTSWLe2VE3y4lRmV5hcHW", 
       "role": "admin"
     },
     "core-services": {
-      "password": "$2b$10$KpDVZqjI8DrlXwK5kqTste5yN0LxwOEQdGXvvPYpDhU0TSvb2Gjkm",
+      "password": "$2b$10$pX2.G60QS5PTgVGLEsAly.DuSwx5PTGyyM936wwywUX9cp/1frrdG",
       "role": "service"
     }
   }
